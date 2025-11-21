@@ -331,4 +331,5 @@ ToDos
 - Add new version release form is too heigh you can not see all of it without scrolling
 - Importing old software version logs
 - Should it be possible to delete Countries, Customers, Software, Users, and Versions? How will it effect the version lists if you delete something? Customers have IsActive should we use that for all? Right now there are delete buttons without warnings on the pages!!
+ - Add update field validation warning on save (version exsist, returned errs from server...)
  
