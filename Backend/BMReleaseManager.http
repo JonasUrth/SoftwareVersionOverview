@@ -1,0 +1,6 @@
+@BMReleaseManager_HostAddress = http://localhost:5153
+
+GET {{BMReleaseManager_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

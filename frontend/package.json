@@ -1,0 +1,23 @@
+{
+  "name": "bm-release-manager-frontend",
+  "version": "1.0.0",
+  "description": "BM Release Manager Elm Frontend",
+  "engines": {
+    "node": ">=18.0.0 <25.0.0",
+    "npm": ">=9.0.0"
+  },
+  "scripts": {
+    "use-node": "powershell -ExecutionPolicy Bypass -File ./use-node.ps1",
+    "server": "elm-spa server",
+    "dev": "concurrently \"npm run watch\" \"npm run serve\"",
+    "watch": "chokidar \"src/**/*.elm\" -c \"elm make .elm-spa/defaults/Main.elm --output=public/dist/elm.js\"",
+    "serve": "npx spa-http-server public -p 1234",
+    "build": "elm make .elm-spa/defaults/Main.elm --output=public/dist/elm.js --optimize"
+  },
+  "devDependencies": {
+    "chokidar-cli": "^3.0.0",
+    "concurrently": "^8.2.2",
+    "spa-http-server": "^0.9.0"
+  }
+}
+

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BM Release Manager</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <script src="/dist/elm.js"></script>
+  <script>
+    // Load stored data from localStorage
+    var storageKey = 'bm-release-manager'
+    var flags = localStorage.getItem(storageKey)
+
+    // Start Elm app with flags
+    var app = Elm.Main.init({ 
+      flags: flags ? JSON.parse(flags) : null 
+    })
+
+    // Save data to localStorage when Elm asks
+    app.ports.save.subscribe(function(data) {
+      localStorage.setItem(data.key, JSON.stringify(data.value))
+    })
+
+    // Send initial localStorage value to Elm
+    app.ports.load.send(flags ? JSON.parse(flags) : null)
+  </script>
+</body>
+</html>
