@@ -1,5 +1,6 @@
 module Pages.Firmware exposing (Model, Msg, page)
 
+import Api.Auth
 import Api.Data exposing (Country, Software, SoftwareType(..), Version, VersionDetail, versionDecoder, versionDetailDecoder)
 import Api.Endpoint as Endpoint
 import Dict exposing (Dict)
@@ -21,7 +22,7 @@ import View exposing (View)
 page : Shared.Model -> Request.With Params -> Page.With Model Msg
 page shared req =
     Page.advanced
-        { init = init shared
+        { init = init shared req
         , update = update shared req
         , view = view shared req
         , subscriptions = subscriptions
@@ -39,8 +40,8 @@ type alias Model =
     }
 
 
-init : Shared.Model -> ( Model, Effect Msg )
-init shared =
+init : Shared.Model -> Request.With Params -> ( Model, Effect Msg )
+init shared req =
     ( { versions = []
       , versionDetails = Dict.empty
       , loading = True
@@ -93,6 +94,8 @@ type Msg
     | GotVersionDetail Int (Result Http.Error VersionDetail)
     | NavigateToRoute Route.Route
     | NavigateToEpromHistory Int
+    | LogoutRequested
+    | LogoutResponse (Result Http.Error ())
 
 
 update : Shared.Model -> Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -138,6 +141,28 @@ update shared req msg model =
         NavigateToRoute route ->
             ( model, Effect.fromCmd (Request.pushRoute route req) )
 
+        LogoutRequested ->
+            ( model
+            , Effect.fromCmd (Api.Auth.logout LogoutResponse)
+            )
+
+        LogoutResponse (Ok _) ->
+            ( model
+            , Effect.batch
+                [ Effect.fromShared Shared.UserLoggedOut
+                , Effect.fromCmd (Request.pushRoute Route.Login req)
+                ]
+            )
+
+        LogoutResponse (Err _) ->
+            -- Even if logout API fails, clear local state and navigate to login
+            ( model
+            , Effect.batch
+                [ Effect.fromShared Shared.UserLoggedOut
+                , Effect.fromCmd (Request.pushRoute Route.Login req)
+                ]
+            )
+
         NavigateToEpromHistory countryId ->
             ( model, Effect.fromCmd (Request.pushRoute (Route.Firmware__EpromHistory__CountryId_ { countryId = String.fromInt countryId }) req) )
 
@@ -166,6 +191,7 @@ view shared req model =
             , viewContent shared model
             ]
         , onNavigate = NavigateToRoute
+        , onLogout = LogoutRequested
         }
 
 

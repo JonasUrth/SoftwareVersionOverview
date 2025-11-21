@@ -1,5 +1,6 @@
 module Pages.Firmware.EpromHistory.CountryId_ exposing (Model, Msg, page)
 
+import Api.Auth
 import Api.Data exposing (Country, SoftwareType(..), Version, VersionDetail, versionDecoder, versionDetailDecoder)
 import Api.Endpoint as Endpoint
 import Dict exposing (Dict)
@@ -105,6 +106,8 @@ type Msg
     = GotVersions (Result Http.Error (List Version))
     | GotVersionDetail Int (Result Http.Error VersionDetail)
     | NavigateToRoute Route.Route
+    | LogoutRequested
+    | LogoutResponse (Result Http.Error ())
 
 
 update : Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -144,6 +147,28 @@ update req msg model =
 
         NavigateToRoute route ->
             ( model, Effect.fromCmd (Request.pushRoute route req) )
+
+        LogoutRequested ->
+            ( model
+            , Effect.fromCmd (Api.Auth.logout LogoutResponse)
+            )
+
+        LogoutResponse (Ok _) ->
+            ( model
+            , Effect.batch
+                [ Effect.fromShared Shared.UserLoggedOut
+                , Effect.fromCmd (Request.pushRoute Route.Login req)
+                ]
+            )
+
+        LogoutResponse (Err _) ->
+            -- Even if logout API fails, clear local state and navigate to login
+            ( model
+            , Effect.batch
+                [ Effect.fromShared Shared.UserLoggedOut
+                , Effect.fromCmd (Request.pushRoute Route.Login req)
+                ]
+            )
 
 
 -- SUBSCRIPTIONS
@@ -186,6 +211,7 @@ view shared req model =
             , viewContent shared model
             ]
         , onNavigate = NavigateToRoute
+        , onLogout = LogoutRequested
         }
 
 

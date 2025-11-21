@@ -1,14 +1,16 @@
 module Pages.Home_ exposing (Model, Msg, page)
 
+import Api.Auth
 import Api.Data exposing (Version)
+import Effect exposing (Effect)
 import Gen.Params.Home_ exposing (Params)
 import Gen.Route as Route
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, preventDefaultOn)
-import Json.Decode as Decode
+import Html.Events exposing (preventDefaultOn)
 import Http
 import Json.Decode as Decode
+import Layouts.Default
 import Page
 import Request
 import Shared
@@ -17,7 +19,7 @@ import View exposing (View)
 
 page : Shared.Model -> Request.With Params -> Page.With Model Msg
 page shared req =
-    Page.element
+    Page.advanced
         { init = init
         , update = update req
         , view = view shared req
@@ -33,10 +35,10 @@ type alias Model =
     }
 
 
-init : ( Model, Cmd Msg )
+init : ( Model, Effect Msg )
 init =
     ( { recentVersions = [] }
-    , fetchRecentVersions
+    , Effect.fromCmd fetchRecentVersions
     )
 
 
@@ -56,34 +58,58 @@ type Msg
     | NavigateToLogin
     | NavigateToRoute Route.Route
     | NavigateToVersion Int
+    | LogoutRequested
+    | LogoutResponse (Result Http.Error ())
 
 
-update : Request.With Params -> Msg -> Model -> ( Model, Cmd Msg )
+update : Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
 update req msg model =
     case msg of
         GotVersions (Ok versions) ->
             ( { model | recentVersions = List.take 10 versions }
-            , Cmd.none
+            , Effect.none
             )
 
         GotVersions (Err _) ->
-            ( model, Cmd.none )
+            ( model, Effect.none )
 
         NavigateToLogin ->
-            ( model, Request.pushRoute Route.Login req )
+            ( model, Effect.fromCmd (Request.pushRoute Route.Login req) )
 
         NavigateToRoute route ->
-            ( model, Request.pushRoute route req )
+            ( model, Effect.fromCmd (Request.pushRoute route req) )
 
         NavigateToVersion id ->
-            ( model, Request.pushRoute (Route.Versions__Id_ { id = String.fromInt id }) req )
+            ( model, Effect.fromCmd (Request.pushRoute (Route.Versions__Id_ { id = String.fromInt id }) req) )
+
+        LogoutRequested ->
+            ( model
+            , Effect.fromCmd (Api.Auth.logout LogoutResponse)
+            )
+
+        LogoutResponse (Ok _) ->
+            ( model
+            , Effect.batch
+                [ Effect.fromShared Shared.UserLoggedOut
+                , Effect.fromCmd (Request.pushRoute Route.Login req)
+                ]
+            )
+
+        LogoutResponse (Err _) ->
+            -- Even if logout API fails, clear local state and navigate to login
+            ( model
+            , Effect.batch
+                [ Effect.fromShared Shared.UserLoggedOut
+                , Effect.fromCmd (Request.pushRoute Route.Login req)
+                ]
+            )
 
 
 -- SUBSCRIPTIONS
 
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions _ =
     Sub.none
 
 
@@ -92,39 +118,56 @@ subscriptions model =
 
 view : Shared.Model -> Request.With Params -> Model -> View Msg
 view shared req model =
-    { title = "Dashboard - BM Release Manager"
-    , body =
-        case shared.user of
-            Nothing ->
-                [ div [ class "container" ]
-                    [ div [ class "hero" ]
-                        [ h1 [] [ text "BM Release Manager" ]
-                        , p [] [ text "Please log in to continue" ]
-                        , a [ href (Route.toHref Route.Login), preventDefaultOn "click" (Decode.succeed ( NavigateToLogin, True )), class "btn-primary" ] [ text "Login" ]
+    Layouts.Default.view
+        { shared = shared
+        , req = req
+        , pageTitle = "Dashboard - BM Release Manager"
+        , pageBody = viewBody shared model
+        , onNavigate = NavigateToRoute
+        , onLogout = LogoutRequested
+        }
+
+
+viewBody :
+    Shared.Model
+    -> Model
+    -> List (Html Msg)
+viewBody shared model =
+    case shared.user of
+        Nothing ->
+            [ div [ class "container" ]
+                [ div [ class "hero" ]
+                    [ h1 [] [ text "BM Release Manager" ]
+                    , p [] [ text "Please log in to continue" ]
+                    , a
+                        [ href (Route.toHref Route.Login)
+                        , preventDefaultOn "click" (Decode.succeed ( NavigateToLogin, True ))
+                        , class "btn-primary"
                         ]
+                        [ text "Login" ]
                     ]
                 ]
+            ]
 
-            Just user ->
-                [ div [ class "container" ]
-                    [ h1 [] [ text ("Welcome, " ++ user.name ++ "!!") ]
-                    , div [ class "dashboard-grid" ]
-                        [ dashboardCard req "Countries" (String.fromInt (List.length shared.countries)) Route.Countries
-                        , dashboardCard req "Customers" (String.fromInt (List.length shared.customers)) Route.Customers
-                        , dashboardCard req "Software" (String.fromInt (List.length shared.software)) Route.Software
-                        , dashboardCard req "Versions" (String.fromInt (List.length model.recentVersions)) Route.Versions
-                        ]
-                    , div [ class "section" ]
-                        [ h2 [] [ text "Recent Releases" ]
-                        , viewRecentVersions req model.recentVersions
-                        ]
+        Just user ->
+            [ div [ class "container" ]
+                [ h1 [] [ text ("Welcome, " ++ user.name ++ "!!") ]
+                , div [ class "dashboard-grid" ]
+                    [ dashboardCard "Countries" (String.fromInt (List.length shared.countries)) Route.Countries
+                    , dashboardCard "Customers" (String.fromInt (List.length shared.customers)) Route.Customers
+                    , dashboardCard "Software" (String.fromInt (List.length shared.software)) Route.Software
+                    , dashboardCard "Versions" (String.fromInt (List.length model.recentVersions)) Route.Versions
+                    ]
+                , div [ class "section" ]
+                    [ h2 [] [ text "Recent Releases" ]
+                    , viewRecentVersions model.recentVersions
                     ]
                 ]
-    }
+            ]
 
 
-dashboardCard : Request.With Params -> String -> String -> Route.Route -> Html Msg
-dashboardCard req title count route =
+dashboardCard : String -> String -> Route.Route -> Html Msg
+dashboardCard title count route =
     a [ href (Route.toHref route), preventDefaultOn "click" (Decode.succeed ( NavigateToRoute route, True )), class "dashboard-card" ]
         [ h3 [] [ text title ]
         , div [ class "count" ] [ text count ]
@@ -132,8 +175,8 @@ dashboardCard req title count route =
         ]
 
 
-viewRecentVersions : Request.With Params -> List Version -> Html Msg
-viewRecentVersions req versions =
+viewRecentVersions : List Version -> Html Msg
+viewRecentVersions versions =
     if List.isEmpty versions then
         p [ class "empty" ] [ text "No releases yet" ]
 
@@ -149,13 +192,13 @@ viewRecentVersions req versions =
                         , th [] [ text "Customers" ]
                         ]
                     ]
-                , tbody [] (List.map (viewVersionRow req) versions)
+                , tbody [] (List.map viewVersionRow versions)
                 ]
             ]
 
 
-viewVersionRow : Request.With Params -> Version -> Html Msg
-viewVersionRow req version =
+viewVersionRow : Version -> Html Msg
+viewVersionRow version =
     tr []
         [ td [] [ text version.softwareName ]
         , td [] [ a [ href (Route.toHref (Route.Versions__Id_ { id = String.fromInt version.id })), preventDefaultOn "click" (Decode.succeed ( NavigateToVersion version.id, True )), class "link" ] [ text version.version ] ]

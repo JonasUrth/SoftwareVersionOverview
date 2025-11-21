@@ -16,6 +16,7 @@ type alias Props msg params =
     , pageTitle : String
     , pageBody : List (Html msg)
     , onNavigate : Route.Route -> msg
+    , onLogout : msg
     }
 
 
@@ -23,37 +24,42 @@ view : Props msg params -> View msg
 view props =
     { title = props.pageTitle
     , body =
-        [ viewNav props.shared props.req props.onNavigate
-        , div [ class "container" ] props.pageBody
+        [ div [ class "layout-container" ]
+            [ viewSidebar props.shared props.onNavigate props.onLogout
+            , div [ class "main-content" ]
+                [ div [ class "container" ] props.pageBody ]
+            ]
         ]
     }
 
 
-viewNav : Shared.Model -> Request.With params -> (Route.Route -> msg) -> Html msg
-viewNav shared req onNavigate =
-    nav [ class "navbar" ]
-        [ div [ class "nav-container" ]
+viewSidebar : Shared.Model -> (Route.Route -> msg) -> msg -> Html msg
+viewSidebar shared onNavigate onLogout =
+    aside [ class "sidebar" ]
+        [ div [ class "sidebar-content" ]
             [ a
                 [ href (Route.toHref Route.Home_)
                 , preventDefaultOn "click" (Decode.succeed ( onNavigate Route.Home_, True ))
-                , class "nav-brand"
+                , class "sidebar-brand"
                 ]
                 [ text "BM Release Manager" ]
-            , div [ class "nav-links" ]
-                [ navLink req Route.Home_ "Home" onNavigate
-                , navLink req Route.Countries "Countries" onNavigate
-                , navLink req Route.Customers "Customers" onNavigate
-                , navLink req Route.Software "Software" onNavigate
-                , navLink req Route.Versions "Versions" onNavigate
-                , navLink req Route.Firmware "Firmware" onNavigate
+            , nav [ class "sidebar-nav" ]
+                [ navLink Route.Home_ "Dashboard" onNavigate
+                , navLink Route.Countries "Countries" onNavigate
+                , navLink Route.Customers "Customers" onNavigate
+                , navLink Route.Software "Software" onNavigate
+                , navLink Route.Versions "Versions" onNavigate
+                , navSection "Release Insights"
+                    [ navSubLink Route.Firmware "Firmware" onNavigate                    
+                    ]
                 ]
             , case shared.user of
                 Just user ->
-                    div [ class "nav-user" ]
-                        [ span [] [ text user.name ]
+                    div [ class "sidebar-user" ]
+                        [ span [ class "sidebar-user-name" ] [ text user.name ]
                         , button
                             [ class "btn-small btn-secondary"
-                            , onClick (onNavigate Route.Login)
+                            , onClick onLogout
                             ]
                             [ text "Logout" ]
                         ]
@@ -64,12 +70,31 @@ viewNav shared req onNavigate =
         ]
 
 
-navLink : Request.With params -> Route.Route -> String -> (Route.Route -> msg) -> Html msg
-navLink req route label onNavigate =
+navLink : Route.Route -> String -> (Route.Route -> msg) -> Html msg
+navLink route label onNavigate =
     a
         [ href (Route.toHref route)
         , preventDefaultOn "click" (Decode.succeed ( onNavigate route, True ))
-        , class "nav-link"
+        , class "sidebar-link"
         ]
         [ text label ]
+
+
+navSubLink : Route.Route -> String -> (Route.Route -> msg) -> Html msg
+navSubLink route label onNavigate =
+    a
+        [ href (Route.toHref route)
+        , preventDefaultOn "click" (Decode.succeed ( onNavigate route, True ))
+        , class "sidebar-sublink"
+        ]
+        [ text label ]
+
+
+navSection : String -> List (Html msg) -> Html msg
+navSection title links =
+    div [ class "sidebar-section" ]
+        [ span [ class "sidebar-section-title" ] [ text title ]
+        , div [ class "sidebar-sub-links" ] links
+        ]
+
 

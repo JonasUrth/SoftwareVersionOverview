@@ -71,22 +71,27 @@ init shared req =
       , historyError = Nothing
       , loading = False
       , token = shared.token
-      , loadingVersion = True
+      , loadingVersion = False
       }
-    , Effect.batch
-        [ if List.isEmpty shared.software then
-            Effect.fromShared Shared.RefreshSoftware
+    , case shared.user of
+        Just _ ->
+            Effect.batch
+                [ if List.isEmpty shared.software then
+                    Effect.fromShared Shared.RefreshSoftware
 
-          else
-            Effect.none
-        , if List.isEmpty shared.customers then
-            Effect.fromShared Shared.RefreshCustomers
+                  else
+                    Effect.none
+                , if List.isEmpty shared.customers then
+                    Effect.fromShared Shared.RefreshCustomers
 
-          else
+                  else
+                    Effect.none
+                , Effect.fromCmd (fetchVersionDetail shared.token versionId)
+                , Effect.fromCmd (fetchVersions shared.token)
+                ]
+
+        Nothing ->
             Effect.none
-        , Effect.fromCmd (fetchVersionDetail shared.token versionId)
-        , Effect.fromCmd (fetchVersions shared.token)
-        ]
     )
 
 

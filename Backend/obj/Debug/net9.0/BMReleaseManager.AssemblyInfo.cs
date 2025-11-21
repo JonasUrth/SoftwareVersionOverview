@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("BMReleaseManager")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b6775bbe42980648e99aaf271a0054dd47173954")]
 [assembly: System.Reflection.AssemblyProductAttribute("BMReleaseManager")]
 [assembly: System.Reflection.AssemblyTitleAttribute("BMReleaseManager")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

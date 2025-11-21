@@ -23,7 +23,7 @@ import View exposing (View)
 page : Shared.Model -> Request.With Params -> Page.With Model Msg
 page shared req =
     Page.advanced
-        { init = init shared
+        { init = init shared req
         , update = update req
         , view = view shared
         , subscriptions = subscriptions
@@ -43,8 +43,8 @@ type alias Model =
     }
 
 
-init : Shared.Model -> ( Model, Effect Msg )
-init shared =
+init : Shared.Model -> Request.With Params -> ( Model, Effect Msg )
+init shared req =
     ( { form =
             { version = ""
             , softwareId = 0
@@ -56,7 +56,7 @@ init shared =
             , countryFilter = ""
             , customerFilter = ""
             , versions = []
-            , versionsLoading = True
+            , versionsLoading = False
             , versionDetails = Dict.empty
             , loadingVersionDetailIds = []
             }
@@ -65,20 +65,25 @@ init shared =
       , loading = False
       , token = shared.token
       }
-    , Effect.batch
-        [ if List.isEmpty shared.software then
-            Effect.fromShared Shared.RefreshSoftware
+    , case shared.user of
+        Just _ ->
+            Effect.batch
+                [ if List.isEmpty shared.software then
+                    Effect.fromShared Shared.RefreshSoftware
 
-          else
-            Effect.none
-        , if List.isEmpty shared.customers then
-            Effect.fromShared Shared.RefreshCustomers
+                  else
+                    Effect.none
+                , if List.isEmpty shared.customers then
+                    Effect.fromShared Shared.RefreshCustomers
 
-          else
+                  else
+                    Effect.none
+                , Effect.fromCmd (Task.perform GotCurrentTime Time.now)
+                , Effect.fromCmd (fetchVersions shared.token)
+                ]
+
+        Nothing ->
             Effect.none
-        , Effect.fromCmd (Task.perform GotCurrentTime Time.now)
-        , Effect.fromCmd (fetchVersions shared.token)
-        ]
     )
 
 

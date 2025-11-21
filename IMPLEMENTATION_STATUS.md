@@ -310,3 +310,25 @@ All backend code is complete and documented. Refer to:
 For frontend development, you'll need to implement the Elm-spa application according to the specification.
 
 
+ToDos
+ - ✅ Navbar logout not working
+ - User management add / edit users 
+ - Hide Navbar items that need login when not logged in
+ - New Release insight view (no user rights nedded): Compleate list of all releases with hidtorey notes and customers
+ - New Release insight view (no user rights nedded): Select Windows software and costomer befor showing latest release, open "installer create applicalion" button
+ - Move RequiresCustomerValidation to the Customer table (server, DB, page software, page customers, New customer, and edit customer needs to fixed)
+ - Edit Software is not possible right now
+ - software.ReleaseMethod should be a enum (think it maybe is on the server allready/DB)
+ - software.ReleaseMethod Needs one more option: FindFolder
+ - Add ReleaseMethod validation befor save new Versions release (warning above save button).
+   1. If fields changes (Version number, Software, or Release Status changes, and on edit page load) update release file status message above save button
+   AND Release Status = ProductionReady
+   AND software.ReleaseMethod = FindFile or CreateCD
+   2. We need to get a warning form the server if it cannot find the file (new endpoint to check if file exsist for software with release)
+   3. File software.FileLocation is saved like this Eks.: "L:\_Software\Releases\Firmware - Eprom\x200F\{{VERSION}}.bin" where the server needs to replase the {{VERSION}} with the version we want to check 
+- Add Requervalidation validation befor save new Versions release (warning above save button).
+   1. if Customer.RequiresCustomerValidation AND Release Status = ProductionReady then add a warning if the user is sure this release is validated by customer "customer name"
+- Add new version release form is too heigh you can not see all of it without scrolling
+- Importing old software version logs
+- Should it be possible to delete Countries, Customers, Software, and Versions? How will it effect the version lists if you delete something? Customers have IsActive should we use that for all? Right now there are delete buttons without warnings on the pages!!
+ 

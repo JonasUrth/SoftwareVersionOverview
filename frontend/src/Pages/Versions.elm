@@ -1,5 +1,6 @@
 module Pages.Versions exposing (Model, Msg, page)
 
+import Api.Auth
 import Api.Data exposing (ReleaseStatus(..), Version, releaseStatusToString)
 import Api.Endpoint as Endpoint
 import Effect exposing (Effect)
@@ -21,7 +22,7 @@ import View exposing (View)
 page : Shared.Model -> Request.With Params -> Page.With Model Msg
 page shared req =
     Page.advanced
-        { init = init shared
+        { init = init shared req
         , update = update shared req
         , view = view shared req
         , subscriptions = subscriptions
@@ -38,13 +39,18 @@ type alias Model =
     }
 
 
-init : Shared.Model -> ( Model, Effect Msg )
-init shared =
+init : Shared.Model -> Request.With Params -> ( Model, Effect Msg )
+init shared req =
     ( { versions = []
-      , loading = True
+      , loading = False
       , error = Nothing
       }
-    , fetchVersions shared.token
+    , case shared.user of
+        Just _ ->
+            fetchVersions shared.token
+
+        Nothing ->
+            Effect.none
     )
 
 
@@ -81,6 +87,8 @@ type Msg
     | NavigateToNew
     | NavigateToVersion Int
     | NavigateToRoute Route.Route
+    | LogoutRequested
+    | LogoutResponse (Result Http.Error ())
 
 
 update : Shared.Model -> Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -104,6 +112,28 @@ update shared req msg model =
         NavigateToRoute route ->
             ( model, Effect.fromCmd (Request.pushRoute route req) )
 
+        LogoutRequested ->
+            ( model
+            , Effect.fromCmd (Api.Auth.logout LogoutResponse)
+            )
+
+        LogoutResponse (Ok _) ->
+            ( model
+            , Effect.batch
+                [ Effect.fromShared Shared.UserLoggedOut
+                , Effect.fromCmd (Request.pushRoute Route.Login req)
+                ]
+            )
+
+        LogoutResponse (Err _) ->
+            -- Even if logout API fails, clear local state and navigate to login
+            ( model
+            , Effect.batch
+                [ Effect.fromShared Shared.UserLoggedOut
+                , Effect.fromCmd (Request.pushRoute Route.Login req)
+                ]
+            )
+
 
 -- SUBSCRIPTIONS
 
@@ -123,13 +153,31 @@ view shared req model =
         , req = req
         , pageTitle = "Versions - BM Release Manager"
         , pageBody =
-            [ div [ class "header" ]
-                [ h1 [] [ text "Versions" ]
-                , a [ href (Route.toHref Route.Versions__New), preventDefaultOn "click" (Decode.succeed ( NavigateToNew, True )), class "btn-primary" ] [ text "+ Create Release" ]
-                ]
-            , viewContent model
-            ]
+            case shared.user of
+                Nothing ->
+                    [ div [ class "container" ]
+                        [ div [ class "hero" ]
+                            [ h1 [] [ text "BM Release Manager" ]
+                            , p [] [ text "Please log in to continue" ]
+                            , a
+                                [ href (Route.toHref Route.Login)
+                                , preventDefaultOn "click" (Decode.succeed ( NavigateToRoute Route.Login, True ))
+                                , class "btn-primary"
+                                ]
+                                [ text "Login" ]
+                            ]
+                        ]
+                    ]
+
+                Just _ ->
+                    [ div [ class "header" ]
+                        [ h1 [] [ text "Versions release overview" ]
+                        , a [ href (Route.toHref Route.Versions__New), preventDefaultOn "click" (Decode.succeed ( NavigateToNew, True )), class "btn-primary" ] [ text "+ Create Release" ]
+                        ]
+                    , viewContent model
+                    ]
         , onNavigate = NavigateToRoute
+        , onLogout = LogoutRequested
         }
 
 

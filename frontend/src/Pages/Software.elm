@@ -1,5 +1,6 @@
 module Pages.Software exposing (Model, Msg, page)
 
+import Api.Auth
 import Api.Data exposing (Software, SoftwareType(..), softwareDecoder, softwareEncoder, softwareTypeFromString, softwareTypeToString)
 import Api.Endpoint as Endpoint
 import Effect exposing (Effect)
@@ -7,8 +8,9 @@ import Gen.Params.Software exposing (Params)
 import Gen.Route as Route
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, onInput, onSubmit)
+import Html.Events exposing (onClick, onInput, onSubmit, preventDefaultOn)
 import Http
+import Json.Decode as Decode
 import Layouts.Default
 import Page
 import Request
@@ -19,7 +21,7 @@ import View exposing (View)
 page : Shared.Model -> Request.With Params -> Page.With Model Msg
 page shared req =
     Page.advanced
-        { init = init shared
+        { init = init shared req
         , update = update req
         , view = view shared req
         , subscriptions = subscriptions
@@ -37,8 +39,8 @@ type alias Model =
     }
 
 
-init : Shared.Model -> ( Model, Effect Msg )
-init shared =
+init : Shared.Model -> Request.With Params -> ( Model, Effect Msg )
+init shared req =
     ( { showForm = False
       , formName = ""
       , formType = ""
@@ -47,11 +49,16 @@ init shared =
       , formReleaseMethod = ""
       , error = Nothing
       }
-    , if List.isEmpty shared.software then
-        Effect.fromShared Shared.RefreshSoftware
+    , case shared.user of
+        Just _ ->
+            if List.isEmpty shared.software then
+                Effect.fromShared Shared.RefreshSoftware
 
-      else
-        Effect.none
+            else
+                Effect.none
+
+        Nothing ->
+            Effect.none
     )
 
 
@@ -68,6 +75,8 @@ type Msg
     | DeleteSoftware Int
     | SoftwareDeleted Int (Result Http.Error ())
     | NavigateToRoute Route.Route
+    | LogoutRequested
+    | LogoutResponse (Result Http.Error ())
 
 
 update : Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -151,6 +160,28 @@ update req msg model =
         NavigateToRoute route ->
             ( model, Effect.fromCmd (Request.pushRoute route req) )
 
+        LogoutRequested ->
+            ( model
+            , Effect.fromCmd (Api.Auth.logout LogoutResponse)
+            )
+
+        LogoutResponse (Ok _) ->
+            ( model
+            , Effect.batch
+                [ Effect.fromShared Shared.UserLoggedOut
+                , Effect.fromCmd (Request.pushRoute Route.Login req)
+                ]
+            )
+
+        LogoutResponse (Err _) ->
+            -- Even if logout API fails, clear local state and navigate to login
+            ( model
+            , Effect.batch
+                [ Effect.fromShared Shared.UserLoggedOut
+                , Effect.fromCmd (Request.pushRoute Route.Login req)
+                ]
+            )
+
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
@@ -164,18 +195,36 @@ view shared req model =
         , req = req
         , pageTitle = "Software - BM Release Manager"
         , pageBody =
-            [ div [ class "header" ]
-                [ h1 [] [ text "Software" ]
-                , button [ class "btn-primary", onClick ShowAddForm ] [ text "+ Add Software" ]
-                ]
-            , if model.showForm then
-                viewForm model
+            case shared.user of
+                Nothing ->
+                    [ div [ class "container" ]
+                        [ div [ class "hero" ]
+                            [ h1 [] [ text "BM Release Manager" ]
+                            , p [] [ text "Please log in to continue" ]
+                            , a
+                                [ href (Route.toHref Route.Login)
+                                , preventDefaultOn "click" (Decode.succeed ( NavigateToRoute Route.Login, True ))
+                                , class "btn-primary"
+                                ]
+                                [ text "Login" ]
+                            ]
+                        ]
+                    ]
 
-              else
-                text ""
-            , viewSoftwareList shared.software
-            ]
+                Just _ ->
+                    [ div [ class "header" ]
+                        [ h1 [] [ text "Software" ]
+                        , button [ class "btn-primary", onClick ShowAddForm ] [ text "+ Add Software" ]
+                        ]
+                    , if model.showForm then
+                        viewForm model
+
+                      else
+                        text ""
+                    , viewSoftwareList shared.software
+                    ]
         , onNavigate = NavigateToRoute
+        , onLogout = LogoutRequested
         }
 
 
@@ -204,7 +253,9 @@ viewForm model =
                 ]
             , div [ class "form-group" ]
                 [ label [] [ text "File Location" ]
-                , input [ type_ "text", value model.formFileLocation, onInput FileLocationChanged, placeholder "C:\\Files\\..." ] []
+                , input [ type_ "text", value model.formFileLocation, onInput FileLocationChanged, placeholder "L:\\_Software\\Releases\\Firmware - Eprom\\x200F\\{{VERSION}}" ] []
+                , small [ style "color" "#666", style "font-size" "0.9em" ]
+                    [ text "Example: L:\\_Software\\Releases\\Firmware - Eprom\\x200F\\{{VERSION}}.bin" ]
                 ]
             , div [ class "form-group" ]
                 [ label [] [ text "Release Method" ]
