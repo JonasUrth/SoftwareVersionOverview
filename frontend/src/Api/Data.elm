@@ -412,6 +412,7 @@ noteInputEncoder note =
 
 type alias UpdateVersionRequest =
     { id : Int
+    , releaseDate : String
     , releaseStatus : ReleaseStatus
     , customerIds : List Int
     , notes : List UpdateNoteInput
@@ -429,6 +430,7 @@ updateVersionEncoder : UpdateVersionRequest -> Encode.Value
 updateVersionEncoder data =
     Encode.object
         [ ( "id", Encode.int data.id )
+        , ( "releaseDate", Encode.string data.releaseDate )
         , ( "releaseStatus", Encode.string (releaseStatusToString data.releaseStatus) )
         , ( "customerIds", Encode.list Encode.int data.customerIds )
         , ( "notes", Encode.list updateNoteInputEncoder data.notes )

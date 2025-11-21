@@ -331,8 +331,16 @@ update req msg model =
 
         FormSubmitted ->
             let
+                releaseDateTime =
+                    if String.isEmpty model.form.releaseTime then
+                        model.form.releaseDate ++ "T00:00:00"
+
+                    else
+                        model.form.releaseDate ++ "T" ++ model.form.releaseTime ++ ":00"
+
                 request =
                     { id = model.versionId
+                    , releaseDate = releaseDateTime
                     , releaseStatus = model.form.releaseStatus
                     , customerIds = model.form.selectedCustomers
                     , notes =

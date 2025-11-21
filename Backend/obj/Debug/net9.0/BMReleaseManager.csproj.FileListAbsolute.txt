@@ -328,3 +328,4 @@ C:\Source\C-Sharp\SoftwareVersionOverview\Backend\obj\Debug\net9.0\refint\BMRele
 C:\Source\C-Sharp\SoftwareVersionOverview\Backend\obj\Debug\net9.0\BMReleaseManager.pdb
 C:\Source\C-Sharp\SoftwareVersionOverview\Backend\obj\Debug\net9.0\BMReleaseManager.genruntimeconfig.cache
 C:\Source\C-Sharp\SoftwareVersionOverview\Backend\obj\Debug\net9.0\ref\BMReleaseManager.dll
+C:\Source\C-Sharp\SoftwareVersionOverview\Backend\obj\Debug\net9.0\BMReleaseManager.sourcelink.json

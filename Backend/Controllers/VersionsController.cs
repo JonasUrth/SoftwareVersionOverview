@@ -367,6 +367,9 @@ public class VersionsController : BaseController
             return NotFound();
         }
 
+        // Update release date
+        versionHistory.ReleaseDate = DateTime.SpecifyKind(request.ReleaseDate, DateTimeKind.Utc);
+
         // Update release status
         versionHistory.ReleaseStatus = request.ReleaseStatus;
 

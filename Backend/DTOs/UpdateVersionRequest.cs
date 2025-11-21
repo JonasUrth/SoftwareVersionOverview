@@ -9,6 +9,9 @@ public class UpdateVersionRequest
     public int Id { get; set; }
 
     [Required]
+    public DateTime ReleaseDate { get; set; }
+
+    [Required]
     public ReleaseStatus ReleaseStatus { get; set; }
 
     [Required]

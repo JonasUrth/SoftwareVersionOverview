@@ -54,14 +54,16 @@ viewSidebar shared onNavigate onLogout =
                         , navLink Route.Versions "Versions" onNavigate
                         , navLink Route.Users "Users" onNavigate
                         , navSection "Release Insights"
-                            [ navSubLink Route.Firmware "Firmware" onNavigate                    
+                            [ navSubLink Route.ReleaseInsight "Release Insight" onNavigate
+                            , navSubLink Route.Firmware "Firmware" onNavigate                    
                             ]
                         ]
 
                     Nothing ->
                         -- Logged out: only show Release Insights
                         [ navSection "Release Insights"
-                            [ navSubLink Route.Firmware "Firmware" onNavigate                    
+                            [ navSubLink Route.ReleaseInsight "Release Insight" onNavigate
+                            , navSubLink Route.Firmware "Firmware" onNavigate                    
                             ]
                         ]
                 )

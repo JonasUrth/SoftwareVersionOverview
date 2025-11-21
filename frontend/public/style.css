@@ -25,6 +25,15 @@ body {
     padding: 2rem;
 }
 
+.full-width-content {
+    margin-left: -2rem;
+    margin-right: -2rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+    width: calc(100% + 4rem);
+    max-width: calc(100vw - 250px);
+}
+
 /* Header */
 .header {
     display: flex;
@@ -165,6 +174,12 @@ textarea {
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     overflow-x: auto;
+}
+
+.table-container-fullwidth {
+    border-radius: 0;
+    margin-left: 0;
+    margin-right: 0;
 }
 
 table {
