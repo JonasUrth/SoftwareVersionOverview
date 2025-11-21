@@ -20,7 +20,7 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    /* max-width: 1200px; */
     margin: 0 auto;
     padding: 2rem;
 }
@@ -208,6 +208,20 @@ tr:hover {
 
 td.actions {
     white-space: nowrap;
+}
+
+/* Release Insight Table Column Widths */
+.release-insight-table th.software-col,
+.release-insight-table td.software-col {
+    width: 100px;
+    min-width: 100px;
+    max-width: 120px;
+}
+
+.release-insight-table th.notes-col,
+.release-insight-table td.notes-col {
+    min-width: 500px;
+    max-width: none;
 }
 
 /* Login */

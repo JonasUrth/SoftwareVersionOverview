@@ -54,7 +54,7 @@ viewSidebar shared onNavigate onLogout =
                         , navLink Route.Versions "Versions" onNavigate
                         , navLink Route.Users "Users" onNavigate
                         , navSection "Release Insights"
-                            [ navSubLink Route.ReleaseInsight "Release Insight" onNavigate
+                            [ navSubLink Route.ReleaseInsight "Release History" onNavigate
                             , navSubLink Route.Firmware "Firmware" onNavigate                    
                             ]
                         ]

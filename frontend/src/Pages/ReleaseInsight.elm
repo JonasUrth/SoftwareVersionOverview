@@ -190,10 +190,10 @@ view shared req model =
     Layouts.Default.view
         { shared = shared
         , req = req
-        , pageTitle = "Release Insight - BM Release Manager"
+        , pageTitle = "Release History - BM Release Manager"
         , pageBody =
             [ div [ class "header" ]
-                [ h1 [] [ text "Release Insight" ]
+                [ h1 [] [ text "Release History" ]
                 , p [ class "subtitle" ] [ text "Complete list of all releases with history notes and customers" ]
                 , label [ style "display" "flex", style "align-items" "center", style "gap" "8px", style "margin-top" "12px" ]
                     [ input
@@ -490,10 +490,10 @@ viewReleaseTable softwareList rows =
                 [ tr []
                     ([ th [] [ text "Release Date" ]
                      ]
-                        ++ List.map (\sw -> th [] [ text sw.name ]) softwareList
+                        ++ List.map (\sw -> th [ class "software-col" ] [ text sw.name ]) softwareList
                         ++ [ th [] [ text "Released By" ]
                            , th [] [ text "Released For" ]
-                           , th [] [ text "Notes" ]
+                           , th [ class "notes-col" ] [ text "Notes" ]
                            , th [] [ text "Release Status" ]
                            ]
                     )
@@ -522,7 +522,7 @@ viewReleaseRow softwareList row =
                             else
                                 [ style "color" "#888", style "font-weight" "normal" ]
                     in
-                    td []
+                    td [ class "software-col" ]
                         [ span styles
                             [ text versionInfo.version ]
                         ]
@@ -530,7 +530,7 @@ viewReleaseRow softwareList row =
                 softwareList
             ++ [ td [] [ text row.releasedBy ]
                , td [] [ text row.releasedFor ]
-               , td [ style "white-space" "pre-wrap", style "max-width" "400px" ] [ text row.notes ]
+               , td [ class "notes-col", style "white-space" "pre-wrap" ] [ text row.notes ]
                , td []
                     (List.map
                         (\status ->
