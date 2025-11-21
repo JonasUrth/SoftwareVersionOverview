@@ -312,8 +312,8 @@ For frontend development, you'll need to implement the Elm-spa application accor
 
 ToDos
  - ✅ Navbar logout not working
- - User management add / edit users 
- - Hide Navbar items that need login when not logged in
+ - ✅ User management add / edit users 
+ - ✅ Hide Navbar items that need login when not logged in
  - New Release insight view (no user rights nedded): Compleate list of all releases with hidtorey notes and customers
  - New Release insight view (no user rights nedded): Select Windows software and costomer befor showing latest release, open "installer create applicalion" button
  - Move RequiresCustomerValidation to the Customer table (server, DB, page software, page customers, New customer, and edit customer needs to fixed)
@@ -330,5 +330,5 @@ ToDos
    1. if Customer.RequiresCustomerValidation AND Release Status = ProductionReady then add a warning if the user is sure this release is validated by customer "customer name"
 - Add new version release form is too heigh you can not see all of it without scrolling
 - Importing old software version logs
-- Should it be possible to delete Countries, Customers, Software, and Versions? How will it effect the version lists if you delete something? Customers have IsActive should we use that for all? Right now there are delete buttons without warnings on the pages!!
+- Should it be possible to delete Countries, Customers, Software, Users, and Versions? How will it effect the version lists if you delete something? Customers have IsActive should we use that for all? Right now there are delete buttons without warnings on the pages!!
  

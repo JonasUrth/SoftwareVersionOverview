@@ -20,6 +20,23 @@ userDecoder =
         (Decode.field "name" Decode.string)
 
 
+userEncoder : { name : String, password : String } -> Encode.Value
+userEncoder data =
+    Encode.object
+        [ ( "name", Encode.string data.name )
+        , ( "password", Encode.string data.password )
+        ]
+
+
+userUpdateEncoder : { id : Int, name : String, password : String } -> Encode.Value
+userUpdateEncoder data =
+    Encode.object
+        [ ( "id", Encode.int data.id )
+        , ( "name", Encode.string data.name )
+        , ( "password", Encode.string data.password )
+        ]
+
+
 -- COUNTRY
 
 

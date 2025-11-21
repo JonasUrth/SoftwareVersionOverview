@@ -44,15 +44,27 @@ viewSidebar shared onNavigate onLogout =
                 ]
                 [ text "BM Release Manager" ]
             , nav [ class "sidebar-nav" ]
-                [ navLink Route.Home_ "Dashboard" onNavigate
-                , navLink Route.Countries "Countries" onNavigate
-                , navLink Route.Customers "Customers" onNavigate
-                , navLink Route.Software "Software" onNavigate
-                , navLink Route.Versions "Versions" onNavigate
-                , navSection "Release Insights"
-                    [ navSubLink Route.Firmware "Firmware" onNavigate                    
-                    ]
-                ]
+                (case shared.user of
+                    Just _ ->
+                        -- Logged in: show all items
+                        [ navLink Route.Home_ "Dashboard" onNavigate
+                        , navLink Route.Countries "Countries" onNavigate
+                        , navLink Route.Customers "Customers" onNavigate
+                        , navLink Route.Software "Software" onNavigate
+                        , navLink Route.Versions "Versions" onNavigate
+                        , navLink Route.Users "Users" onNavigate
+                        , navSection "Release Insights"
+                            [ navSubLink Route.Firmware "Firmware" onNavigate                    
+                            ]
+                        ]
+
+                    Nothing ->
+                        -- Logged out: only show Release Insights
+                        [ navSection "Release Insights"
+                            [ navSubLink Route.Firmware "Firmware" onNavigate                    
+                            ]
+                        ]
+                )
             , case shared.user of
                 Just user ->
                     div [ class "sidebar-user" ]
@@ -65,7 +77,14 @@ viewSidebar shared onNavigate onLogout =
                         ]
 
                 Nothing ->
-                    text ""
+                    div [ class "sidebar-user" ]
+                        [ a
+                            [ href (Route.toHref Route.Login)
+                            , preventDefaultOn "click" (Decode.succeed ( onNavigate Route.Login, True ))
+                            , class "btn-small btn-primary"
+                            ]
+                            [ text "Login" ]
+                        ]
             ]
         ]
 
