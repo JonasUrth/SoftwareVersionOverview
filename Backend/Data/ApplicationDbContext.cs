@@ -37,6 +37,7 @@ public class ApplicationDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).IsRequired();
             entity.Property(e => e.IsActive).IsRequired().HasDefaultValue(true);
+            entity.Property(e => e.RequiresCustomerValidation).IsRequired().HasDefaultValue(false);
             
             entity.HasOne(e => e.Country)
                 .WithMany(c => c.Customers)
@@ -59,7 +60,6 @@ public class ApplicationDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).IsRequired();
             entity.Property(e => e.Type).IsRequired();
-            entity.Property(e => e.RequiresCustomerValidation).IsRequired().HasDefaultValue(false);
         });
 
         // VersionHistory configuration

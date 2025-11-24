@@ -26,7 +26,6 @@ public class SoftwareController : ControllerBase
                 s.Id,
                 s.Name,
                 Type = s.Type.ToString(),
-                s.RequiresCustomerValidation,
                 s.FileLocation,
                 ReleaseMethod = s.ReleaseMethod != null ? s.ReleaseMethod.ToString() : null
             })
@@ -55,7 +54,6 @@ public class SoftwareController : ControllerBase
         {
             Name = request.Name,
             Type = request.Type,
-            RequiresCustomerValidation = request.RequiresCustomerValidation,
             FileLocation = request.FileLocation,
             ReleaseMethod = request.ReleaseMethod
         };
@@ -68,7 +66,6 @@ public class SoftwareController : ControllerBase
             software.Id,
             software.Name,
             Type = software.Type.ToString(),
-            software.RequiresCustomerValidation,
             software.FileLocation,
             ReleaseMethod = software.ReleaseMethod?.ToString()
         };
@@ -87,7 +84,6 @@ public class SoftwareController : ControllerBase
 
         software.Name = request.Name;
         software.Type = request.Type;
-        software.RequiresCustomerValidation = request.RequiresCustomerValidation;
         software.FileLocation = request.FileLocation;
         software.ReleaseMethod = request.ReleaseMethod;
 

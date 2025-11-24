@@ -12,9 +12,6 @@ public class Software
     [Required]
     public SoftwareType Type { get; set; }
 
-    [Required]
-    public bool RequiresCustomerValidation { get; set; } = false;
-
     public string? FileLocation { get; set; }
 
     public ReleaseMethod? ReleaseMethod { get; set; }

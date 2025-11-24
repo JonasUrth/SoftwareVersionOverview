@@ -67,9 +67,13 @@ Access the API documentation at: `http://localhost:5000/swagger`
 ### Version Management
 - `GET /api/versions` - Get all versions
 - `GET /api/versions/{id}` - Get version details with notes and customers
+- `GET /api/versions/latest?softwareId=1&customerId=1` - Get the latest Windows release for a customer
 - `POST /api/versions` - Create new version (may return validation warning)
 - `POST /api/versions/confirm` - Create version (bypass validation warning)
 - `PUT /api/versions/{id}` - Update version
+
+### Installer Integration
+- `POST /api/installer/open` - Launch the configured Windows installer builder application
 
 ### Audit Logs
 - `GET /api/audit` - Get recent audit logs (query: `?limit=100`)
@@ -170,6 +174,19 @@ To add more origins, edit `Program.cs`:
 ```csharp
 policy.WithOrigins("http://localhost:8000", "http://localhost:1234", "http://your-url")
 ```
+
+### Installer Settings
+Configure the Windows installer builder integration in `appsettings.json`:
+```json
+"InstallerSettings": {
+  "ExecutablePath": "C:\\Program Files\\BMReleaseManager\\InstallerCreator.exe",
+  "ArgumentsTemplate": "\"{softwareName}\" \"{customerName}\" \"{version}\"",
+  "WorkingDirectory": ""
+}
+```
+- `ExecutablePath` - Absolute path to the Windows application used for creating installers
+- `ArgumentsTemplate` - Optional command-line template (placeholders: `{softwareName}`, `{customerName}`, `{version}`)
+- `WorkingDirectory` - Optional working directory for the process
 
 ## Features Implemented
 

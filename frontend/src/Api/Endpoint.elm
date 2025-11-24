@@ -38,6 +38,21 @@ versions paths =
     Url.Builder.crossOrigin baseUrl ("api" :: "versions" :: paths) []
 
 
+versionsLatest : Int -> Int -> String
+versionsLatest softwareId customerId =
+    Url.Builder.crossOrigin
+        baseUrl
+        [ "api", "versions", "latest" ]
+        [ Url.Builder.int "softwareId" softwareId
+        , Url.Builder.int "customerId" customerId
+        ]
+
+
+installerOpen : String
+installerOpen =
+    Url.Builder.crossOrigin baseUrl ("api" :: "installer" :: [ "open" ]) []
+
+
 audit : List String -> String
 audit paths =
     Url.Builder.crossOrigin baseUrl ("api" :: "audit" :: paths) []

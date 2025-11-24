@@ -32,7 +32,6 @@ type alias Model =
     { showForm : Bool
     , formName : String
     , formType : String
-    , formRequiresValidation : Bool
     , formFileLocation : String
     , formReleaseMethod : String
     , error : Maybe String
@@ -44,7 +43,6 @@ init shared req =
     ( { showForm = False
       , formName = ""
       , formType = ""
-      , formRequiresValidation = False
       , formFileLocation = ""
       , formReleaseMethod = ""
       , error = Nothing
@@ -67,7 +65,6 @@ type Msg
     | CancelForm
     | NameChanged String
     | TypeChanged String
-    | RequiresValidationChanged Bool
     | FileLocationChanged String
     | ReleaseMethodChanged String
     | FormSubmitted
@@ -94,9 +91,6 @@ update req msg model =
         TypeChanged type_ ->
             ( { model | formType = type_ }, Effect.none )
 
-        RequiresValidationChanged val ->
-            ( { model | formRequiresValidation = val }, Effect.none )
-
         FileLocationChanged loc ->
             ( { model | formFileLocation = loc }, Effect.none )
 
@@ -113,7 +107,6 @@ update req msg model =
                             softwareEncoder
                                 { name = model.formName
                                 , type_ = softwareTypeFromString model.formType
-                                , requiresCustomerValidation = model.formRequiresValidation
                                 , fileLocation =
                                     if String.isEmpty model.formFileLocation then
                                         Nothing
@@ -246,12 +239,6 @@ viewForm model =
                     ]
                 ]
             , div [ class "form-group" ]
-                [ label []
-                    [ input [ type_ "checkbox", checked model.formRequiresValidation, onClick (RequiresValidationChanged (not model.formRequiresValidation)) ] []
-                    , text " Requires Customer Validation"
-                    ]
-                ]
-            , div [ class "form-group" ]
                 [ label [] [ text "File Location" ]
                 , input [ type_ "text", value model.formFileLocation, onInput FileLocationChanged, placeholder "L:\\_Software\\Releases\\Firmware - Eprom\\x200F\\{{VERSION}}" ] []
                 , small [ style "color" "#666", style "font-size" "0.9em" ]
@@ -285,7 +272,6 @@ viewSoftwareList software =
                     [ tr []
                         [ th [] [ text "Name" ]
                         , th [] [ text "Type" ]
-                        , th [] [ text "Requires Validation" ]
                         , th [] [ text "Actions" ]
                         ]
                     ]
@@ -299,7 +285,6 @@ viewSoftwareRow sw =
     tr []
         [ td [] [ text sw.name ]
         , td [] [ text (formatSoftwareType sw.type_) ]
-        , td [] [ text (if sw.requiresCustomerValidation then "Yes" else "No") ]
         , td [ class "actions" ]
             [ button [ class "btn-small btn-danger", onClick (DeleteSoftware sw.id) ] [ text "Delete" ]
             ]

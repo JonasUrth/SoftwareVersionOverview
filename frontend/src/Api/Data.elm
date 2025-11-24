@@ -79,25 +79,28 @@ type alias Customer =
     , isActive : Bool
     , countryId : Int
     , country : Country
+    , requiresCustomerValidation : Bool
     }
 
 
 customerDecoder : Decoder Customer
 customerDecoder =
-    Decode.map5 Customer
+    Decode.map6 Customer
         (Decode.field "id" Decode.int)
         (Decode.field "name" Decode.string)
         (Decode.field "isActive" Decode.bool)
         (Decode.field "countryId" Decode.int)
         (Decode.field "country" countryDecoder)
+        (Decode.field "requiresCustomerValidation" Decode.bool)
 
 
-customerEncoder : { name : String, countryId : Int, isActive : Bool } -> Encode.Value
+customerEncoder : { name : String, countryId : Int, isActive : Bool, requiresCustomerValidation : Bool } -> Encode.Value
 customerEncoder data =
     Encode.object
         [ ( "name", Encode.string data.name )
         , ( "countryId", Encode.int data.countryId )
         , ( "isActive", Encode.bool data.isActive )
+        , ( "requiresCustomerValidation", Encode.bool data.requiresCustomerValidation )
         ]
 
 
@@ -156,7 +159,6 @@ type alias Software =
     { id : Int
     , name : String
     , type_ : SoftwareType
-    , requiresCustomerValidation : Bool
     , fileLocation : Maybe String
     , releaseMethod : Maybe String
     }
@@ -164,21 +166,19 @@ type alias Software =
 
 softwareDecoder : Decoder Software
 softwareDecoder =
-    Decode.map6 Software
+    Decode.map5 Software
         (Decode.field "id" Decode.int)
         (Decode.field "name" Decode.string)
         (Decode.field "type" softwareTypeDecoder)
-        (Decode.field "requiresCustomerValidation" Decode.bool)
         (Decode.maybe (Decode.field "fileLocation" Decode.string))
         (Decode.maybe (Decode.field "releaseMethod" Decode.string))
 
 
-softwareEncoder : { name : String, type_ : SoftwareType, requiresCustomerValidation : Bool, fileLocation : Maybe String, releaseMethod : Maybe String } -> Encode.Value
+softwareEncoder : { name : String, type_ : SoftwareType, fileLocation : Maybe String, releaseMethod : Maybe String } -> Encode.Value
 softwareEncoder data =
     Encode.object
         [ ( "name", Encode.string data.name )
         , ( "type", Encode.string (softwareTypeToString data.type_) )
-        , ( "requiresCustomerValidation", Encode.bool data.requiresCustomerValidation )
         , ( "fileLocation"
           , case data.fileLocation of
                 Just loc ->

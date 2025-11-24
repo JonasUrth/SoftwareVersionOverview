@@ -36,6 +36,7 @@ type alias Model =
     , formName : String
     , formCountryId : Int
     , formIsActive : Bool
+    , formRequiresValidation : Bool
     , editingId : Maybe Int
     , error : Maybe String
     }
@@ -47,6 +48,7 @@ init shared req =
       , formName = ""
       , formCountryId = 0
       , formIsActive = True
+      , formRequiresValidation = False
       , editingId = Nothing
       , error = Nothing
       }
@@ -74,8 +76,10 @@ type Msg
     | NameChanged String
     | CountryChanged String
     | IsActiveChanged Bool
+    | RequiresValidationChanged Bool
     | FormSubmitted
     | CustomerCreated (Result Http.Error Customer)
+    | CustomerUpdated (Result Http.Error ())
     | EditCustomer Customer
     | DeleteCustomer Int
     | CustomerDeleted Int (Result Http.Error ())
@@ -88,10 +92,10 @@ update : Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
 update req msg model =
     case msg of
         ShowAddForm ->
-            ( { model | showForm = True, formName = "", formCountryId = 0, formIsActive = True, editingId = Nothing }, Effect.none )
+            ( { model | showForm = True, formName = "", formCountryId = 0, formIsActive = True, formRequiresValidation = False, editingId = Nothing }, Effect.none )
 
         CancelForm ->
-            ( { model | showForm = False, formName = "", formCountryId = 0, formIsActive = True, editingId = Nothing }, Effect.none )
+            ( { model | showForm = False, formName = "", formCountryId = 0, formIsActive = True, formRequiresValidation = False, editingId = Nothing }, Effect.none )
 
         NameChanged name ->
             ( { model | formName = name }, Effect.none )
@@ -102,21 +106,48 @@ update req msg model =
         IsActiveChanged isActive ->
             ( { model | formIsActive = isActive }, Effect.none )
 
+        RequiresValidationChanged val ->
+            ( { model | formRequiresValidation = val }, Effect.none )
+
         FormSubmitted ->
-            ( model
-            , Effect.fromCmd <|
-                Http.post
-                    { url = Endpoint.customers []
-                    , body =
-                        Http.jsonBody <|
-                            customerEncoder
-                                { name = model.formName
-                                , countryId = model.formCountryId
-                                , isActive = model.formIsActive
-                                }
-                    , expect = Http.expectJson CustomerCreated customerDecoder
-                    }
-            )
+            case model.editingId of
+                Just id ->
+                    ( model
+                    , Effect.fromCmd <|
+                        Http.request
+                            { method = "PUT"
+                            , headers = []
+                            , url = Endpoint.customers [ String.fromInt id ]
+                            , body =
+                                Http.jsonBody <|
+                                    customerEncoder
+                                        { name = model.formName
+                                        , countryId = model.formCountryId
+                                        , isActive = model.formIsActive
+                                        , requiresCustomerValidation = model.formRequiresValidation
+                                        }
+                            , expect = Http.expectWhatever CustomerUpdated
+                            , timeout = Nothing
+                            , tracker = Nothing
+                            }
+                    )
+
+                Nothing ->
+                    ( model
+                    , Effect.fromCmd <|
+                        Http.post
+                            { url = Endpoint.customers []
+                            , body =
+                                Http.jsonBody <|
+                                    customerEncoder
+                                        { name = model.formName
+                                        , countryId = model.formCountryId
+                                        , isActive = model.formIsActive
+                                        , requiresCustomerValidation = model.formRequiresValidation
+                                        }
+                            , expect = Http.expectJson CustomerCreated customerDecoder
+                            }
+                    )
 
         CustomerCreated (Ok customer) ->
             ( { model
@@ -124,6 +155,7 @@ update req msg model =
                 , formName = ""
                 , formCountryId = 0
                 , formIsActive = True
+                , formRequiresValidation = False
                 , error = Nothing
               }
             , Effect.fromShared Shared.RefreshCustomers
@@ -132,12 +164,29 @@ update req msg model =
         CustomerCreated (Err _) ->
             ( { model | error = Just "Failed to create customer" }, Effect.none )
 
+        CustomerUpdated (Ok ()) ->
+            ( { model
+                | showForm = False
+                , formName = ""
+                , formCountryId = 0
+                , formIsActive = True
+                , formRequiresValidation = False
+                , editingId = Nothing
+                , error = Nothing
+              }
+            , Effect.fromShared Shared.RefreshCustomers
+            )
+
+        CustomerUpdated (Err _) ->
+            ( { model | error = Just "Failed to update customer" }, Effect.none )
+
         EditCustomer customer ->
             ( { model
                 | showForm = True
                 , formName = customer.name
                 , formCountryId = customer.countryId
                 , formIsActive = customer.isActive
+                , formRequiresValidation = customer.requiresCustomerValidation
                 , editingId = Just customer.id
               }
             , Effect.none
@@ -304,6 +353,17 @@ viewForm shared model =
                     , text " Active"
                     ]
                 ]
+            , div [ class "form-group" ]
+                [ label []
+                    [ input
+                        [ type_ "checkbox"
+                        , checked model.formRequiresValidation
+                        , onClick (RequiresValidationChanged (not model.formRequiresValidation))
+                        ]
+                        []
+                    , text " Requires Customer Validation"
+                    ]
+                ]
             , div [ class "form-actions" ]
                 [ button [ type_ "button", class "btn-secondary", onClick CancelForm ] [ text "Cancel" ]
                 , button [ type_ "submit", class "btn-primary" ] [ text "Save" ]
@@ -325,6 +385,7 @@ viewCustomers customers =
                         [ th [] [ text "Name" ]
                         , th [] [ text "Country" ]
                         , th [] [ text "Status" ]
+                        , th [] [ text "Requires Validation" ]
                         , th [] [ text "Actions" ]
                         ]
                     ]
@@ -357,6 +418,7 @@ viewCustomerRow customer =
                     )
                 ]
             ]
+        , td [] [ text (if customer.requiresCustomerValidation then "Yes" else "No") ]
         , td [ class "actions" ]
             [ button [ class "btn-small", onClick (EditCustomer customer) ] [ text "Edit" ]
             , button [ class "btn-small btn-danger", onClick (DeleteCustomer customer.id) ] [ text "Delete" ]

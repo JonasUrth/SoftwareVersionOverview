@@ -1,15 +1,15 @@
-module Pages.ReleaseInsight exposing (Model, Msg, page)
+module Pages.ReleaseHistory exposing (Model, Msg, page)
 
 import Api.Auth
 import Api.Data exposing (CustomerDetail, NoteDetail, ReleaseStatus(..), Software, Version, VersionDetail, releaseStatusFromString, releaseStatusToString, versionDecoder, versionDetailDecoder)
 import Api.Endpoint as Endpoint
 import Dict exposing (Dict)
 import Effect exposing (Effect)
-import Gen.Params.ReleaseInsight exposing (Params)
+import Gen.Params.ReleaseHistory exposing (Params)
 import Gen.Route as Route
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, preventDefaultOn)
+import Html.Events exposing (onClick, onInput, preventDefaultOn)
 import Http
 import Json.Decode as Decode
 import Layouts.Default
@@ -48,6 +48,20 @@ type alias ReleaseInsightRow =
     }
 
 
+type SortColumn
+    = SortDate
+    | SortSoftware Int
+    | SortReleasedBy
+    | SortReleasedFor
+    | SortNotes
+    | SortStatus
+
+
+type SortDirection
+    = Ascending
+    | Descending
+
+
 type alias Model =
     { versions : List Version
     , versionDetails : Dict Int VersionDetail
@@ -55,6 +69,14 @@ type alias Model =
     , error : Maybe String
     , softwareList : List Software
     , compactView : Bool
+    , filterDate : String
+    , filterReleasedBy : String
+    , filterReleasedFor : String
+    , filterNotes : String
+    , filterStatus : String
+    , filterSoftwareVersions : Dict Int String
+    , sortColumn : Maybe SortColumn
+    , sortDirection : SortDirection
     }
 
 
@@ -66,6 +88,14 @@ init shared req =
       , error = Nothing
       , softwareList = shared.software
       , compactView = True
+      , filterDate = ""
+      , filterReleasedBy = ""
+      , filterReleasedFor = ""
+      , filterNotes = ""
+      , filterStatus = ""
+      , filterSoftwareVersions = Dict.empty
+      , sortColumn = Just SortDate
+      , sortDirection = Descending
       }
     , Effect.batch
         [ fetchVersions
@@ -106,6 +136,13 @@ type Msg
     | LogoutRequested
     | LogoutResponse (Result Http.Error ())
     | ToggleCompactView
+    | FilterDateChanged String
+    | FilterReleasedByChanged String
+    | FilterReleasedForChanged String
+    | FilterNotesChanged String
+    | FilterStatusChanged String
+    | FilterSoftwareVersionChanged Int String
+    | SortColumnClicked SortColumn
 
 
 update : Shared.Model -> Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -172,6 +209,45 @@ update shared req msg model =
 
         ToggleCompactView ->
             ( { model | compactView = not model.compactView }, Effect.none )
+
+        FilterDateChanged value ->
+            ( { model | filterDate = value }, Effect.none )
+
+        FilterReleasedByChanged value ->
+            ( { model | filterReleasedBy = value }, Effect.none )
+
+        FilterReleasedForChanged value ->
+            ( { model | filterReleasedFor = value }, Effect.none )
+
+        FilterNotesChanged value ->
+            ( { model | filterNotes = value }, Effect.none )
+
+        FilterStatusChanged value ->
+            ( { model | filterStatus = value }, Effect.none )
+
+        FilterSoftwareVersionChanged softwareId value ->
+            ( { model | filterSoftwareVersions = Dict.insert softwareId value model.filterSoftwareVersions }, Effect.none )
+
+        SortColumnClicked column ->
+            let
+                newDirection =
+                    case model.sortColumn of
+                        Just currentColumn ->
+                            if currentColumn == column then
+                                case model.sortDirection of
+                                    Ascending ->
+                                        Descending
+
+                                    Descending ->
+                                        Ascending
+
+                            else
+                                Ascending
+
+                        Nothing ->
+                            Ascending
+            in
+            ( { model | sortColumn = Just column, sortDirection = newDirection }, Effect.none )
 
 
 -- SUBSCRIPTIONS
@@ -242,12 +318,14 @@ viewContent shared model =
                                 else
                                     identity
                                )
+                            |> filterRows model softwareList
+                            |> sortRows model softwareList
                 in
                 if List.isEmpty rows then
                     p [ class "empty" ] [ text "No releases found." ]
 
                 else
-                    viewReleaseTable softwareList rows
+                    viewReleaseTable model softwareList rows
 
 
 buildReleaseInsightRows : List Version -> Dict Int VersionDetail -> List ReleaseInsightRow
@@ -482,19 +560,250 @@ fillMissingVersions softwareList rows =
             )
 
 
-viewReleaseTable : List Software -> List ReleaseInsightRow -> Html Msg
-viewReleaseTable softwareList rows =
+sortRows : Model -> List Software -> List ReleaseInsightRow -> List ReleaseInsightRow
+sortRows model softwareList rows =
+    case model.sortColumn of
+        Just column ->
+            let
+                compareRows row1 row2 =
+                    case column of
+                        SortDate ->
+                            -- Sort by date first, then customer (case-insensitive)
+                            case compare row1.releaseDate row2.releaseDate of
+                                LT -> LT
+                                GT -> GT
+                                EQ -> compare (String.toLower row1.releasedFor) (String.toLower row2.releasedFor)
+
+                        SortSoftware softwareId ->
+                            -- Sort by software version first (case-insensitive), then date
+                            let
+                                version1 =
+                                    Dict.get softwareId row1.softwareVersions
+                                        |> Maybe.map .version
+                                        |> Maybe.withDefault ""
+                                        |> String.toLower
+
+                                version2 =
+                                    Dict.get softwareId row2.softwareVersions
+                                        |> Maybe.map .version
+                                        |> Maybe.withDefault ""
+                                        |> String.toLower
+                            in
+                            case compare version1 version2 of
+                                LT -> LT
+                                GT -> GT
+                                EQ -> compare row1.releaseDate row2.releaseDate
+
+                        SortReleasedBy ->
+                            -- Sort by released by first (case-insensitive), then date
+                            case compare (String.toLower row1.releasedBy) (String.toLower row2.releasedBy) of
+                                LT -> LT
+                                GT -> GT
+                                EQ -> compare row1.releaseDate row2.releaseDate
+
+                        SortReleasedFor ->
+                            -- Sort by released for first (case-insensitive), then date
+                            case compare (String.toLower row1.releasedFor) (String.toLower row2.releasedFor) of
+                                LT -> LT
+                                GT -> GT
+                                EQ -> compare row1.releaseDate row2.releaseDate
+
+                        SortNotes ->
+                            -- Sort by notes first (case-insensitive), then date
+                            case compare (String.toLower row1.notes) (String.toLower row2.notes) of
+                                LT -> LT
+                                GT -> GT
+                                EQ -> compare row1.releaseDate row2.releaseDate
+
+                        SortStatus ->
+                            -- Sort by status first (case-insensitive), then date
+                            let
+                                status1 =
+                                    row1.releaseStatuses
+                                        |> List.map releaseStatusToString
+                                        |> String.join ", "
+                                        |> String.toLower
+
+                                status2 =
+                                    row2.releaseStatuses
+                                        |> List.map releaseStatusToString
+                                        |> String.join ", "
+                                        |> String.toLower
+                            in
+                            case compare status1 status2 of
+                                LT -> LT
+                                GT -> GT
+                                EQ -> compare row1.releaseDate row2.releaseDate
+
+                sorted =
+                    List.sortWith compareRows rows
+            in
+            case model.sortDirection of
+                Ascending ->
+                    sorted
+
+                Descending ->
+                    List.reverse sorted
+
+        Nothing ->
+            rows
+
+
+filterRows : Model -> List Software -> List ReleaseInsightRow -> List ReleaseInsightRow
+filterRows model softwareList rows =
+    rows
+        |> List.filter
+            (\row ->
+                let
+                    dateMatch =
+                        String.isEmpty model.filterDate
+                            || String.contains (String.toLower model.filterDate) (String.toLower row.releaseDate)
+
+                    releasedByMatch =
+                        String.isEmpty model.filterReleasedBy
+                            || String.contains (String.toLower model.filterReleasedBy) (String.toLower row.releasedBy)
+
+                    releasedForMatch =
+                        String.isEmpty model.filterReleasedFor
+                            || String.contains (String.toLower model.filterReleasedFor) (String.toLower row.releasedFor)
+
+                    notesMatch =
+                        String.isEmpty model.filterNotes
+                            || String.contains (String.toLower model.filterNotes) (String.toLower row.notes)
+
+                    statusMatch =
+                        String.isEmpty model.filterStatus
+                            || List.any
+                                (\status ->
+                                    String.contains (String.toLower model.filterStatus) (String.toLower (releaseStatusToString status))
+                                )
+                                row.releaseStatuses
+
+                    softwareVersionsMatch =
+                        softwareList
+                            |> List.all
+                                (\sw ->
+                                    let
+                                        filterValue =
+                                            Dict.get sw.id model.filterSoftwareVersions
+                                                |> Maybe.withDefault ""
+
+                                        versionInfo =
+                                            Dict.get sw.id row.softwareVersions
+                                                |> Maybe.withDefault { version = "", isFromCurrentDate = False }
+                                    in
+                                    String.isEmpty filterValue
+                                        || String.contains (String.toLower filterValue) (String.toLower versionInfo.version)
+                                )
+                in
+                dateMatch && releasedByMatch && releasedForMatch && notesMatch && statusMatch && softwareVersionsMatch
+            )
+
+
+viewSortableHeader : Model -> SortColumn -> String -> List (Attribute Msg) -> Html Msg
+viewSortableHeader model column label attrs =
+    let
+        headerAttrs =
+            [ onClick (SortColumnClicked column)
+            , style "cursor" "pointer"
+            , style "user-select" "none"
+            ]
+                ++ attrs
+    in
+    th headerAttrs
+        [ text label ]
+
+
+viewFilterInputCell : Model -> SortColumn -> List (Attribute Msg) -> Html Msg -> Html Msg
+viewFilterInputCell model column attrs inputField =
+    let
+        isActive =
+            model.sortColumn == Just column
+
+        indicatorText =
+            if isActive then
+                case model.sortDirection of
+                    Ascending ->
+                        "▲"
+
+                    Descending ->
+                        "▼"
+
+            else
+                "▲"
+
+        indicatorClass =
+            String.join " "
+                ([ "sort-indicator"
+                 , "sort-indicator-button"
+                 ]
+                    ++ (if isActive then
+                            [ "sort-indicator-active" ]
+
+                        else
+                            [ "sort-indicator-inactive" ]
+                       )
+                )
+    in
+    th attrs
+        [ div [ class "filter-cell" ]
+            [ inputField
+            , span
+                [ class indicatorClass
+                , title "Change sort order"
+                , onClick (SortColumnClicked column)
+                ]
+                [ text indicatorText ]
+            ]
+        ]
+
+
+filterInput : String -> (String -> Msg) -> Html Msg
+filterInput value_ onChange =
+    input
+        [ type_ "text"
+        , placeholder "Filter..."
+        , value value_
+        , onInput onChange
+        , style "width" "100%"
+        , style "padding" "4px"
+        , style "box-sizing" "border-box"
+        ]
+        []
+
+
+viewReleaseTable : Model -> List Software -> List ReleaseInsightRow -> Html Msg
+viewReleaseTable model softwareList rows =
     div [ class "table-container table-container-fullwidth", style "overflow-x" "auto" ]
         [ table [ class "release-insight-table" ]
             [ thead []
                 [ tr []
-                    ([ th [] [ text "Release Date" ]
+                    ([ viewSortableHeader model SortDate "Release Date" []
                      ]
-                        ++ List.map (\sw -> th [ class "software-col" ] [ text sw.name ]) softwareList
-                        ++ [ th [] [ text "Released By" ]
-                           , th [] [ text "Released For" ]
-                           , th [ class "notes-col" ] [ text "Notes" ]
-                           , th [] [ text "Release Status" ]
+                        ++ List.map
+                            (\sw ->
+                                viewSortableHeader model (SortSoftware sw.id) sw.name [ class "software-col" ]
+                            )
+                            softwareList
+                        ++ [ viewSortableHeader model SortReleasedBy "Released By" []
+                           , viewSortableHeader model SortReleasedFor "Released For" []
+                           , viewSortableHeader model SortNotes "Notes" [ class "notes-col" ]
+                           , viewSortableHeader model SortStatus "Release Status" []
+                           ]
+                    )
+                , tr [ class "filter-row" ]
+                    ([ viewFilterInputCell model SortDate [] (filterInput model.filterDate FilterDateChanged)
+                     ]
+                        ++ List.map
+                            (\sw ->
+                                viewFilterInputCell model (SortSoftware sw.id) [ class "software-col" ]
+                                    (filterInput (Dict.get sw.id model.filterSoftwareVersions |> Maybe.withDefault "") (FilterSoftwareVersionChanged sw.id))
+                            )
+                            softwareList
+                        ++ [ viewFilterInputCell model SortReleasedBy [] (filterInput model.filterReleasedBy FilterReleasedByChanged)
+                           , viewFilterInputCell model SortReleasedFor [] (filterInput model.filterReleasedFor FilterReleasedForChanged)
+                           , viewFilterInputCell model SortNotes [ class "notes-col" ] (filterInput model.filterNotes FilterNotesChanged)
+                           , viewFilterInputCell model SortStatus [] (filterInput model.filterStatus FilterStatusChanged)
                            ]
                     )
                 ]

@@ -54,7 +54,8 @@ viewSidebar shared onNavigate onLogout =
                         , navLink Route.Versions "Versions" onNavigate
                         , navLink Route.Users "Users" onNavigate
                         , navSection "Release Insights"
-                            [ navSubLink Route.ReleaseInsight "Release History" onNavigate
+                            [ navSubLink Route.ReleaseHistory "Release History" onNavigate
+                            , navSubLink Route.ReleaseInsight__Latest "Latest Windows Release" onNavigate
                             , navSubLink Route.Firmware "Firmware" onNavigate                    
                             ]
                         ]
@@ -62,7 +63,8 @@ viewSidebar shared onNavigate onLogout =
                     Nothing ->
                         -- Logged out: only show Release Insights
                         [ navSection "Release Insights"
-                            [ navSubLink Route.ReleaseInsight "Release Insight" onNavigate
+                            [ navSubLink Route.ReleaseHistory "Release Insight" onNavigate
+                            , navSubLink Route.ReleaseInsight__Latest "Latest Windows Release" onNavigate
                             , navSubLink Route.Firmware "Firmware" onNavigate                    
                             ]
                         ]

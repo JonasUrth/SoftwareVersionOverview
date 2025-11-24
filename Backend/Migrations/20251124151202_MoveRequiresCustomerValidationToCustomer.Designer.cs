@@ -3,6 +3,7 @@ using System;
 using BMReleaseManager.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BMReleaseManager.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251124151202_MoveRequiresCustomerValidationToCustomer")]
+    partial class MoveRequiresCustomerValidationToCustomer
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -55,7 +58,7 @@ namespace BMReleaseManager.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AuditLogs", (string)null);
+                    b.ToTable("AuditLogs");
                 });
 
             modelBuilder.Entity("BMReleaseManager.Models.Country", b =>
@@ -75,7 +78,7 @@ namespace BMReleaseManager.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Countries", (string)null);
+                    b.ToTable("Countries");
                 });
 
             modelBuilder.Entity("BMReleaseManager.Models.Customer", b =>
@@ -107,7 +110,7 @@ namespace BMReleaseManager.Migrations
 
                     b.HasIndex("CountryId");
 
-                    b.ToTable("Customers", (string)null);
+                    b.ToTable("Customers");
                 });
 
             modelBuilder.Entity("BMReleaseManager.Models.HistoryNote", b =>
@@ -129,7 +132,7 @@ namespace BMReleaseManager.Migrations
 
                     b.HasIndex("VersionHistoryId");
 
-                    b.ToTable("HistoryNotes", (string)null);
+                    b.ToTable("HistoryNotes");
                 });
 
             modelBuilder.Entity("BMReleaseManager.Models.HistoryNoteCustomer", b =>
@@ -153,7 +156,7 @@ namespace BMReleaseManager.Migrations
                     b.HasIndex("HistoryNoteId", "CustomerId")
                         .IsUnique();
 
-                    b.ToTable("HistoryNoteCustomers", (string)null);
+                    b.ToTable("HistoryNoteCustomers");
                 });
 
             modelBuilder.Entity("BMReleaseManager.Models.Software", b =>
@@ -179,7 +182,7 @@ namespace BMReleaseManager.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Softwares", (string)null);
+                    b.ToTable("Softwares");
                 });
 
             modelBuilder.Entity("BMReleaseManager.Models.User", b =>
@@ -203,7 +206,7 @@ namespace BMReleaseManager.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("BMReleaseManager.Models.VersionHistory", b =>
@@ -263,7 +266,7 @@ namespace BMReleaseManager.Migrations
                     b.HasIndex("Version", "SoftwareId")
                         .IsUnique();
 
-                    b.ToTable("VersionHistories", (string)null);
+                    b.ToTable("VersionHistories");
                 });
 
             modelBuilder.Entity("BMReleaseManager.Models.VersionHistoryCustomer", b =>
@@ -287,7 +290,7 @@ namespace BMReleaseManager.Migrations
                     b.HasIndex("VersionHistoryId", "CustomerId")
                         .IsUnique();
 
-                    b.ToTable("VersionHistoryCustomers", (string)null);
+                    b.ToTable("VersionHistoryCustomers");
                 });
 
             modelBuilder.Entity("BMReleaseManager.Models.AuditLog", b =>

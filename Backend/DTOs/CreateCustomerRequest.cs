@@ -11,5 +11,7 @@ public class CreateCustomerRequest
     public int CountryId { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    public bool RequiresCustomerValidation { get; set; } = false;
 }
 

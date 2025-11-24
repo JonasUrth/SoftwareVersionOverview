@@ -34,6 +34,7 @@ public class CustomersController : ControllerBase
                 c.Name,
                 c.IsActive,
                 c.CountryId,
+                c.RequiresCustomerValidation,
                 Country = new
                 {
                     c.Country.Id,
@@ -68,7 +69,8 @@ public class CustomersController : ControllerBase
         {
             Name = request.Name,
             CountryId = request.CountryId,
-            IsActive = request.IsActive
+            IsActive = request.IsActive,
+            RequiresCustomerValidation = request.RequiresCustomerValidation
         };
 
         _context.Customers.Add(customer);
@@ -83,6 +85,7 @@ public class CustomersController : ControllerBase
             customer.Name,
             customer.IsActive,
             customer.CountryId,
+            customer.RequiresCustomerValidation,
             Country = new
             {
                 customer.Country.Id,
@@ -106,6 +109,7 @@ public class CustomersController : ControllerBase
         customer.Name = request.Name;
         customer.CountryId = request.CountryId;
         customer.IsActive = request.IsActive;
+        customer.RequiresCustomerValidation = request.RequiresCustomerValidation;
 
         try
         {

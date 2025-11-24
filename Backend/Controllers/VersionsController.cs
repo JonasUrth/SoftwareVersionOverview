@@ -98,6 +98,39 @@ public class VersionsController : BaseController
         return Ok(response);
     }
 
+    [HttpGet("latest")]
+    public async Task<ActionResult<VersionDetailResponse>> GetLatest([FromQuery] int softwareId, [FromQuery] int customerId)
+    {
+        if (softwareId <= 0 || customerId <= 0)
+        {
+            return BadRequest(new { message = "softwareId and customerId are required." });
+        }
+
+        var software = await _context.Softwares
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == softwareId && s.Type == SoftwareType.Windows);
+
+        if (software == null)
+        {
+            return NotFound(new { message = "Windows software not found." });
+        }
+
+        var latestVersionId = await _context.VersionHistories
+            .Where(v => v.SoftwareId == softwareId)
+            .Where(v => v.VersionHistoryCustomers.Any(vhc => vhc.CustomerId == customerId))
+            .OrderByDescending(v => v.ReleaseDate)
+            .Select(v => v.Id)
+            .FirstOrDefaultAsync();
+
+        if (latestVersionId == 0)
+        {
+            return NotFound(new { message = "No releases found for this software and customer." });
+        }
+
+        var detail = await GetVersionDetailById(latestVersionId);
+        return Ok(detail);
+    }
+
     [HttpPost]
     public async Task<ActionResult<VersionDetailResponse>> Create([FromBody] CreateVersionRequest request)
     {
@@ -144,20 +177,14 @@ public class VersionsController : BaseController
             }
         }
 
-        // Validation 5: Check if software requires customer validation
-        var software = await _context.Softwares.FindAsync(request.SoftwareId);
-        if (software == null)
-        {
-            return BadRequest(new { message = "Software not found" });
-        }
+        // Validation 5: Check if any customers require customer validation
+        var customersRequiringValidation = await _context.Customers
+            .Where(c => request.CustomerIds.Contains(c.Id) && c.RequiresCustomerValidation)
+            .Select(c => c.Name)
+            .ToListAsync();
 
-        if (software.RequiresCustomerValidation)
+        if (customersRequiringValidation.Any())
         {
-            var customersRequiringValidation = await _context.Customers
-                .Where(c => request.CustomerIds.Contains(c.Id))
-                .Select(c => c.Name)
-                .ToListAsync();
-
             // Return warning info (frontend should show confirmation dialog)
             return Ok(new
             {

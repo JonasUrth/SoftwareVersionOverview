@@ -12,5 +12,8 @@ public class UpdateCustomerRequest
 
     [Required]
     public bool IsActive { get; set; }
+
+    [Required]
+    public bool RequiresCustomerValidation { get; set; }
 }
 
