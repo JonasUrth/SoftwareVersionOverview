@@ -18,6 +18,9 @@ public class UpdateVersionRequest
     public List<int> CustomerIds { get; set; } = new();
 
     [Required]
+    public List<CustomerStageDto> CustomerStages { get; set; } = new();
+
+    [Required]
     public List<UpdateNoteDto> Notes { get; set; } = new();
 }
 

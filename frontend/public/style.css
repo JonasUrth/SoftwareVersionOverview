@@ -429,6 +429,11 @@ td.actions {
     color: white;
 }
 
+.status-custom {
+    background: #8e44ad;
+    color: white;
+}
+
 /* Messages */
 .error {
     background: #e74c3c;

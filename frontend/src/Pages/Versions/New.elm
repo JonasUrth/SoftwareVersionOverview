@@ -1,6 +1,6 @@
 module Pages.Versions.New exposing (Model, Msg, page)
 
-import Api.Data exposing (ReleaseStatus(..), Software, SoftwareType(..), Version, VersionDetail, createVersionEncoder, releaseStatusFromString, versionDecoder, versionDetailDecoder)
+import Api.Data exposing (Customer, CustomerReleaseStage(..), ReleaseStatus(..), Software, SoftwareType(..), Version, VersionDetail, createVersionEncoder, customerReleaseStageFromString, customerReleaseStageToString, releaseStatusFromString, versionDecoder, versionDetailDecoder)
 import Api.Endpoint as Endpoint
 import Dict
 import Effect exposing (Effect)
@@ -44,7 +44,7 @@ type alias Model =
 
 
 init : Shared.Model -> Request.With Params -> ( Model, Effect Msg )
-init shared req =
+init shared _ =
     ( { form =
             { version = ""
             , softwareId = 0
@@ -52,6 +52,7 @@ init shared req =
             , releaseTime = ""
             , releaseStatus = PreRelease
             , selectedCustomers = []
+            , customerStages = Dict.empty
             , notes = [ { note = "", customerIds = [], id = Nothing } ]
             , countryFilter = ""
             , customerFilter = ""
@@ -101,6 +102,7 @@ type Msg
     | ToggleCountry Bool (List Int)
     | CountryFilterChanged String
     | CustomerFilterChanged String
+    | CustomerStageChanged Int String
     | NoteChanged Int String
     | ToggleNoteCustomer Int Int
     | AddNote
@@ -148,8 +150,13 @@ update req msg model =
         ReleaseStatusChanged status ->
             let
                 form = model.form
+                newStatus =
+                    releaseStatusFromString status
+
+                syncedStages =
+                    syncCustomerStages newStatus form.selectedCustomers form.customerStages
             in
-            ( { model | form = { form | releaseStatus = releaseStatusFromString status } }, Effect.none )
+            ( { model | form = { form | releaseStatus = newStatus, customerStages = syncedStages } }, Effect.none )
 
         ToggleCustomer customerId ->
             let
@@ -160,8 +167,11 @@ update req msg model =
 
                     else
                         customerId :: form.selectedCustomers
+
+                syncedStages =
+                    syncCustomerStages form.releaseStatus newSelected form.customerStages
             in
-            ( { model | form = { form | selectedCustomers = newSelected } }, Effect.none )
+            ( { model | form = { form | selectedCustomers = newSelected, customerStages = syncedStages } }, Effect.none )
 
         ToggleCountry checked customerIds ->
             let
@@ -181,8 +191,11 @@ update req msg model =
 
                     else
                         List.filter (\cid -> not (List.member cid customerIds)) form.selectedCustomers
+
+                syncedStages =
+                    syncCustomerStages form.releaseStatus newSelected form.customerStages
             in
-            ( { model | form = { form | selectedCustomers = newSelected } }, Effect.none )
+            ( { model | form = { form | selectedCustomers = newSelected, customerStages = syncedStages } }, Effect.none )
 
         CountryFilterChanged query ->
             let
@@ -195,6 +208,14 @@ update req msg model =
                 form = model.form
             in
             ( { model | form = { form | customerFilter = query } }, Effect.none )
+
+        CustomerStageChanged customerId stageStr ->
+            let
+                form = model.form
+                newStage =
+                    customerReleaseStageFromString stageStr
+            in
+            ( { model | form = { form | customerStages = Dict.insert customerId newStage form.customerStages } }, Effect.none )
 
         VersionsFetched (Ok versions) ->
             let
@@ -294,12 +315,16 @@ update req msg model =
 
         FormSubmitted ->
             let
+                stages =
+                    buildCustomerStagePayload model.form
+
                 request =
                     { version = model.form.version
                     , softwareId = model.form.softwareId
                     , releaseDate = releaseDateTimeString model.form
                     , releaseStatus = model.form.releaseStatus
                     , customerIds = model.form.selectedCustomers
+                    , customerStages = stages
                     , notes =
                         List.map
                             (\n -> { note = n.note, customerIds = n.customerIds })
@@ -375,8 +400,9 @@ view shared model =
                 ]
             , viewError model.error
             , Html.form [ onSubmit FormSubmitted, class "form-card" ]
-                [ viewVersionInfo shared model.form hasSoftware
+                [ viewVersionInfo shared model.form hasSoftware individualEnabled
                 , viewCustomerSelection shared model hasSoftware individualEnabled
+                , viewCustomerStages shared model hasSoftware individualEnabled
                 , viewNotes shared model hasSoftware
                 , div [ class "form-actions" ]
                     [ button [ type_ "button", class "btn-secondary", onClick GoBack ] [ text "Cancel" ]
@@ -409,8 +435,8 @@ viewError error =
             text ""
 
 
-viewVersionInfo : Shared.Model -> Form.Model -> Bool -> Html Msg
-viewVersionInfo shared form fieldsEnabled =
+viewVersionInfo : Shared.Model -> Form.Model -> Bool -> Bool -> Html Msg
+viewVersionInfo shared form fieldsEnabled customEnabled =
     div []
         [ h3 [] [ text "Release Information" ]
         , div [ class "form-group" ]
@@ -464,6 +490,12 @@ viewVersionInfo shared form fieldsEnabled =
                 [ option [ value "PreRelease", selected (form.releaseStatus == PreRelease) ] [ text "Pre-Release" ]
                 , option [ value "Released", selected (form.releaseStatus == Released) ] [ text "Released" ]
                 , option [ value "ProductionReady", selected (form.releaseStatus == ProductionReady) ] [ text "Production Ready" ]
+                , option
+                    [ value "CustomPerCustomer"
+                    , selected (form.releaseStatus == CustomPerCustomer)
+                    , disabled (not customEnabled)
+                    ]
+                    [ text "Individual customer releases" ]
                 ]
             ]
         ]
@@ -490,6 +522,66 @@ viewCustomerSelection shared model countriesEnabled individualsEnabled =
             , viewCustomerList model.form shared.customers individualsEnabled
             ]
         ]
+
+
+viewCustomerStages : Shared.Model -> Model -> Bool -> Bool -> Html Msg
+viewCustomerStages shared model hasSoftware individualsEnabled =
+    if (not hasSoftware) || model.form.releaseStatus /= CustomPerCustomer then
+        text ""
+
+    else
+        let
+            selectedCustomers =
+                shared.customers
+                    |> List.filter (\customer -> List.member customer.id model.form.selectedCustomers)
+                    |> List.sortBy .name
+        in
+        div []
+            [ h3 [] [ text "Customer Release Stages" ]
+            , if not individualsEnabled then
+                p [ class "help-text warning" ]
+                    [ text "Individual customer releases are available only for Windows software." ]
+
+              else if List.isEmpty selectedCustomers then
+                p [ class "help-text" ] [ text "Select at least one customer to configure stages." ]
+
+              else
+                div [ class "customer-stages" ]
+                    (List.map (viewCustomerStageControl model) selectedCustomers)
+            ]
+
+
+viewCustomerStageControl : Model -> Customer -> Html Msg
+viewCustomerStageControl model customer =
+    let
+        stage =
+            Dict.get customer.id model.form.customerStages
+                |> Maybe.withDefault CustomerPreRelease
+
+        stageValue =
+            customerReleaseStageToString stage
+    in
+    div [ class "customer-stage-row" ]
+        [ div [] [ strong [] [ text customer.name ], text (" (" ++ customer.country.name ++ ")") ]
+        , select
+            [ value stageValue
+            , onInput (CustomerStageChanged customer.id)
+            ]
+            (List.map (viewStageOption stageValue) customerStageOptions)
+        ]
+
+
+viewStageOption : String -> CustomerReleaseStage -> Html Msg
+viewStageOption selectedValue stage =
+    let
+        stageValue =
+            customerReleaseStageToString stage
+    in
+    option
+        [ value stageValue
+        , selected (selectedValue == stageValue)
+        ]
+        [ text (customerStageLabel stage) ]
 
 
 viewCountrySelection : Form.Model -> List Form.CountryGroup -> Bool -> Html Msg
@@ -533,7 +625,7 @@ viewCountryCheckbox form enabled country =
         ]
 
 
-viewCustomerList : Form.Model -> List Api.Data.Customer -> Bool -> Html Msg
+viewCustomerList : Form.Model -> List Customer -> Bool -> Html Msg
 viewCustomerList form customers enabled =
     let
         filtered =
@@ -554,7 +646,7 @@ viewCustomerList form customers enabled =
         ]
 
 
-viewCustomerCheckbox : Form.Model -> Bool -> Api.Data.Customer -> Html Msg
+viewCustomerCheckbox : Form.Model -> Bool -> Customer -> Html Msg
 viewCustomerCheckbox form enabled customer =
     label [ class "checkbox-label" ]
         [ input
@@ -566,6 +658,24 @@ viewCustomerCheckbox form enabled customer =
             []
         , text (" " ++ customer.name ++ " (" ++ customer.country.name ++ ")")
         ]
+
+
+customerStageOptions : List CustomerReleaseStage
+customerStageOptions =
+    [ CustomerPreRelease, CustomerReleased, CustomerProductionReady ]
+
+
+customerStageLabel : CustomerReleaseStage -> String
+customerStageLabel stage =
+    case stage of
+        CustomerPreRelease ->
+            "Pre-Release"
+
+        CustomerReleased ->
+            "Released"
+
+        CustomerProductionReady ->
+            "Production Ready"
 
 
 viewNotes : Shared.Model -> Model -> Bool -> Html Msg
@@ -713,3 +823,74 @@ releaseDateTimeString form =
                 form.releaseTime
     in
     form.releaseDate ++ "T" ++ timePart ++ ":00"
+
+
+buildCustomerStagePayload : Form.Model -> List { customerId : Int, releaseStage : CustomerReleaseStage }
+buildCustomerStagePayload form =
+    let
+        fallbackStage =
+            defaultStageForStatus form.releaseStatus
+    in
+    form.selectedCustomers
+        |> List.map
+            (\customerId ->
+                { customerId = customerId
+                , releaseStage =
+                    Dict.get customerId form.customerStages
+                        |> Maybe.withDefault
+                            (if form.releaseStatus == CustomPerCustomer then
+                                CustomerPreRelease
+
+                             else
+                                fallbackStage
+                            )
+                }
+            )
+
+
+syncCustomerStages : ReleaseStatus -> List Int -> Dict.Dict Int CustomerReleaseStage -> Dict.Dict Int CustomerReleaseStage
+syncCustomerStages releaseStatus selected current =
+    let
+        trimmed =
+            Dict.filter (\cid _ -> List.member cid selected) current
+
+        stageForStatus =
+            defaultStageForStatus releaseStatus
+
+        insertDefault cid acc =
+            case Dict.get cid acc of
+                Just _ ->
+                    if releaseStatus == CustomPerCustomer then
+                        acc
+
+                    else
+                        Dict.insert cid stageForStatus acc
+
+                Nothing ->
+                    let
+                        defaultStage =
+                            if releaseStatus == CustomPerCustomer then
+                                CustomerPreRelease
+
+                            else
+                                stageForStatus
+                    in
+                    Dict.insert cid defaultStage acc
+    in
+    List.foldl insertDefault trimmed selected
+
+
+defaultStageForStatus : ReleaseStatus -> CustomerReleaseStage
+defaultStageForStatus status =
+    case status of
+        PreRelease ->
+            CustomerPreRelease
+
+        Released ->
+            CustomerReleased
+
+        ProductionReady ->
+            CustomerProductionReady
+
+        CustomPerCustomer ->
+            CustomerPreRelease

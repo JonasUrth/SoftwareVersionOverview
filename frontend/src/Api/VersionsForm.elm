@@ -1,6 +1,6 @@
 module Api.VersionsForm exposing (CountryGroup, Model, NoteForm, countryGroups, filterCountryGroups, filterCustomers, countryDisplayLabel, latestCountryVersionStatus, LatestVersionStatus, ensureVersionDetails, versionsForSelectedSoftware, versionHasCountry)
 
-import Api.Data exposing (Customer, ReleaseStatus, Version, VersionDetail)
+import Api.Data exposing (Customer, CustomerReleaseStage, ReleaseStatus, Version, VersionDetail)
 import Dict
 import Effect exposing (Effect)
 
@@ -15,6 +15,7 @@ type alias Model =
     , releaseTime : String
     , releaseStatus : ReleaseStatus
     , selectedCustomers : List Int
+    , customerStages : Dict.Dict Int CustomerReleaseStage
     , notes : List NoteForm
     , countryFilter : String
     , customerFilter : String

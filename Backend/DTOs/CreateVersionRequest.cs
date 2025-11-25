@@ -21,6 +21,9 @@ public class CreateVersionRequest
     public List<int> CustomerIds { get; set; } = new();
 
     [Required]
+    public List<CustomerStageDto> CustomerStages { get; set; } = new();
+
+    [Required]
     public List<NoteDto> Notes { get; set; } = new();
 
     // Status tracking fields (all optional - auto-populated based on ReleaseStatus)

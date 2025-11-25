@@ -317,9 +317,9 @@ ToDos
  - ✅ New Release insight view (no user rights nedded): Compleate list of all releases with hidtorey notes and customers
  - ✅ New Release insight view (no user rights nedded): Select Windows software and costomer befor showing latest release, open "installer create applicalion" button
  - ✅ Move RequiresCustomerValidation to the Customer table (server, DB + migration, page software, page customers, New customer, and edit customer needs to be fixed)
- - Edit Software is not possible right now
  - software.ReleaseMethod should be a enum (think it maybe is allready on the server allready/DB)
  - software.ReleaseMethod Needs one more option: FindFolder
+ - Edit Software is not possible right now
  - Add ReleaseMethod validation befor save new Versions release (warning above save button).
    1. If fields changes (Version number, Software, or Release Status changes, and on edit page load) update release file status message above save button
    AND Release Status = ProductionReady

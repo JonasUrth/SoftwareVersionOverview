@@ -119,6 +119,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<VersionHistoryCustomer>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.ReleaseStage).IsRequired();
             
             // Unique constraint on (VersionHistoryId, CustomerId)
             entity.HasIndex(e => new { e.VersionHistoryId, e.CustomerId }).IsUnique();

@@ -202,7 +202,7 @@ viewVersionRow version =
     tr []
         [ td [] [ text version.softwareName ]
         , td [] [ a [ href (Route.toHref (Route.Versions__Id_ { id = String.fromInt version.id })), preventDefaultOn "click" (Decode.succeed ( NavigateToVersion version.id, True )), class "link" ] [ text version.version ] ]
-        , td [] [ span [ class ("badge " ++ statusClass version.releaseStatus) ] [ text (Api.Data.releaseStatusToString version.releaseStatus) ] ]
+        , td [] [ span [ class ("badge " ++ statusClass version.releaseStatus) ] [ text (Api.Data.releaseStatusLabel version.releaseStatus) ] ]
         , td [] [ text version.releasedBy ]
         , td [] [ text (String.fromInt version.customerCount) ]
         ]
@@ -219,3 +219,6 @@ statusClass status =
 
         Api.Data.ProductionReady ->
             "status-production"
+
+        Api.Data.CustomPerCustomer ->
+            "status-custom"

@@ -42,60 +42,13 @@ public class VersionsController : BaseController
     [HttpGet("{id}")]
     public async Task<ActionResult<VersionDetailResponse>> GetById(int id)
     {
-        var version = await _context.VersionHistories
-            .Include(v => v.Software)
-            .Include(v => v.ReleasedBy)
-            .Include(v => v.VersionHistoryCustomers)
-                .ThenInclude(vhc => vhc.Customer)
-                    .ThenInclude(c => c.Country)
-            .Include(v => v.HistoryNotes)
-                .ThenInclude(n => n.HistoryNoteCustomers)
-                    .ThenInclude(hnc => hnc.Customer)
-                        .ThenInclude(c => c.Country)
-            .FirstOrDefaultAsync(v => v.Id == id);
-
-        if (version == null)
+        var detail = await GetVersionDetailById(id);
+        if (detail == null)
         {
             return NotFound();
         }
 
-        var response = new VersionDetailResponse
-        {
-            Id = version.Id,
-            Version = version.Version,
-            SoftwareId = version.SoftwareId,
-            SoftwareName = version.Software.Name,
-            ReleaseDate = version.ReleaseDate,
-            ReleaseStatus = version.ReleaseStatus,
-            ReleasedByName = version.ReleasedBy.Name,
-            Customers = version.VersionHistoryCustomers
-                .Select(vhc => new CustomerDto
-                {
-                    Id = vhc.Customer.Id,
-                    Name = vhc.Customer.Name,
-                    IsActive = vhc.Customer.IsActive,
-                    CountryName = vhc.Customer.Country.Name
-                })
-                .ToList(),
-            Notes = version.HistoryNotes
-                .Select(n => new NoteDetailDto
-                {
-                    Id = n.Id,
-                    Note = n.Note,
-                    Customers = n.HistoryNoteCustomers
-                        .Select(hnc => new CustomerDto
-                        {
-                            Id = hnc.Customer.Id,
-                            Name = hnc.Customer.Name,
-                            IsActive = hnc.Customer.IsActive,
-                            CountryName = hnc.Customer.Country.Name
-                        })
-                        .ToList()
-                })
-                .ToList()
-        };
-
-        return Ok(response);
+        return Ok(detail);
     }
 
     [HttpGet("latest")]
@@ -115,19 +68,27 @@ public class VersionsController : BaseController
             return NotFound(new { message = "Windows software not found." });
         }
 
-        var latestVersionId = await _context.VersionHistories
-            .Where(v => v.SoftwareId == softwareId)
-            .Where(v => v.VersionHistoryCustomers.Any(vhc => vhc.CustomerId == customerId))
-            .OrderByDescending(v => v.ReleaseDate)
-            .Select(v => v.Id)
+        var latestVersionId = await _context.VersionHistoryCustomers
+            .Where(vhc =>
+                vhc.CustomerId == customerId
+                    && vhc.VersionHistory.SoftwareId == softwareId
+                    && vhc.ReleaseStage == CustomerReleaseStage.ProductionReady
+            )
+            .OrderByDescending(vhc => vhc.VersionHistory.ReleaseDate)
+            .Select(vhc => vhc.VersionHistoryId)
             .FirstOrDefaultAsync();
 
         if (latestVersionId == 0)
         {
-            return NotFound(new { message = "No releases found for this software and customer." });
+            return NotFound(new { message = "No production-ready releases found for this software and customer." });
         }
 
         var detail = await GetVersionDetailById(latestVersionId);
+        if (detail == null)
+        {
+            return NotFound(new { message = "Release details unavailable." });
+        }
+
         return Ok(detail);
     }
 
@@ -177,21 +138,12 @@ public class VersionsController : BaseController
             }
         }
 
-        // Validation 5: Check if any customers require customer validation
-        var customersRequiringValidation = await _context.Customers
-            .Where(c => request.CustomerIds.Contains(c.Id) && c.RequiresCustomerValidation)
-            .Select(c => c.Name)
-            .ToListAsync();
+        var (stageValid, stageError, customerStageLookup) =
+            ResolveCustomerStages(request.ReleaseStatus, request.CustomerIds, request.CustomerStages);
 
-        if (customersRequiringValidation.Any())
+        if (!stageValid)
         {
-            // Return warning info (frontend should show confirmation dialog)
-            return Ok(new
-            {
-                requiresConfirmation = true,
-                message = $"Customer(s) '{string.Join(", ", customersRequiringValidation)}' require customer version validation. Are you sure you want to release to these customers?",
-                customers = customersRequiringValidation
-            });
+            return BadRequest(new { message = stageError });
         }
 
         // Create version history
@@ -223,7 +175,8 @@ public class VersionsController : BaseController
             _context.VersionHistoryCustomers.Add(new VersionHistoryCustomer
             {
                 VersionHistoryId = versionHistory.Id,
-                CustomerId = customerId
+                CustomerId = customerId,
+                ReleaseStage = customerStageLookup[customerId]
             });
         }
 
@@ -305,6 +258,14 @@ public class VersionsController : BaseController
             }
         }
 
+        var (stageValid, stageError, customerStageLookup) =
+            ResolveCustomerStages(request.ReleaseStatus, request.CustomerIds, request.CustomerStages);
+
+        if (!stageValid)
+        {
+            return BadRequest(new { message = stageError });
+        }
+
         // Create version history
         var releaseDateUtc = DateTime.SpecifyKind(request.ReleaseDate, DateTimeKind.Utc);
         var nowUtc = DateTime.UtcNow;
@@ -334,7 +295,8 @@ public class VersionsController : BaseController
             _context.VersionHistoryCustomers.Add(new VersionHistoryCustomer
             {
                 VersionHistoryId = versionHistory.Id,
-                CustomerId = customerId
+                CustomerId = customerId,
+                ReleaseStage = customerStageLookup[customerId]
             });
         }
 
@@ -363,7 +325,7 @@ public class VersionsController : BaseController
 
         // Create audit log
         await CreateAuditLog(userId.Value, "VERSION_HISTORY", versionHistory.Id.ToString(), "CREATE", 
-            $"Created version {request.Version} for software ID {request.SoftwareId} (confirmed with validation warning)");
+            $"Created version {request.Version} for software ID {request.SoftwareId}");
 
         return CreatedAtAction(nameof(GetById), new { id = versionHistory.Id }, 
             await GetVersionDetailById(versionHistory.Id));
@@ -394,11 +356,27 @@ public class VersionsController : BaseController
             return NotFound();
         }
 
+        var (stageValid, stageError, customerStageLookup) =
+            ResolveCustomerStages(request.ReleaseStatus, request.CustomerIds, request.CustomerStages);
+
+        if (!stageValid)
+        {
+            return BadRequest(new { message = stageError });
+        }
+
         // Update release date
         versionHistory.ReleaseDate = DateTime.SpecifyKind(request.ReleaseDate, DateTimeKind.Utc);
 
         // Update release status
         versionHistory.ReleaseStatus = request.ReleaseStatus;
+
+        foreach (var vhc in versionHistory.VersionHistoryCustomers)
+        {
+            if (customerStageLookup.TryGetValue(vhc.CustomerId, out var stage))
+            {
+                vhc.ReleaseStage = stage;
+            }
+        }
 
         // Update customers
         var existingCustomerIds = versionHistory.VersionHistoryCustomers.Select(vhc => vhc.CustomerId).ToList();
@@ -410,7 +388,8 @@ public class VersionsController : BaseController
             _context.VersionHistoryCustomers.Add(new VersionHistoryCustomer
             {
                 VersionHistoryId = id,
-                CustomerId = customerId
+                CustomerId = customerId,
+                ReleaseStage = customerStageLookup[customerId]
             });
         }
 
@@ -497,7 +476,60 @@ public class VersionsController : BaseController
         return NoContent();
     }
 
-    private async Task<VersionDetailResponse> GetVersionDetailById(int id)
+    private (bool IsValid, string? Error, Dictionary<int, CustomerReleaseStage> StageMap) ResolveCustomerStages(
+        ReleaseStatus releaseStatus,
+        List<int> customerIds,
+        List<CustomerStageDto>? customerStages)
+    {
+        var lookup = new Dictionary<int, CustomerReleaseStage>();
+        customerStages ??= new List<CustomerStageDto>();
+
+        if (!customerIds.Any())
+        {
+            return (true, null, lookup);
+        }
+
+        if (releaseStatus == ReleaseStatus.CustomPerCustomer)
+        {
+            foreach (var customerId in customerIds)
+            {
+                var stage = customerStages.FirstOrDefault(cs => cs.CustomerId == customerId);
+                if (stage == null)
+                {
+                    return (false, $"Missing release stage for customer ID {customerId}.", lookup);
+                }
+
+                lookup[customerId] = stage.ReleaseStage;
+            }
+
+            if (customerStages.Any(cs => !customerIds.Contains(cs.CustomerId)))
+            {
+                return (false, "Customer stages contain IDs that are not part of this release.", lookup);
+            }
+        }
+        else
+        {
+            var defaultStage = MapReleaseStatusToStage(releaseStatus);
+            foreach (var customerId in customerIds)
+            {
+                lookup[customerId] = defaultStage;
+            }
+        }
+
+        return (true, null, lookup);
+    }
+
+    private CustomerReleaseStage MapReleaseStatusToStage(ReleaseStatus releaseStatus)
+    {
+        return releaseStatus switch
+        {
+            ReleaseStatus.Released => CustomerReleaseStage.Released,
+            ReleaseStatus.ProductionReady => CustomerReleaseStage.ProductionReady,
+            _ => CustomerReleaseStage.PreRelease
+        };
+    }
+
+    private async Task<VersionDetailResponse?> GetVersionDetailById(int id)
     {
         var version = await _context.VersionHistories
             .Include(v => v.Software)
@@ -509,7 +541,14 @@ public class VersionsController : BaseController
                 .ThenInclude(n => n.HistoryNoteCustomers)
                     .ThenInclude(hnc => hnc.Customer)
                         .ThenInclude(c => c.Country)
-            .FirstAsync(v => v.Id == id);
+            .FirstOrDefaultAsync(v => v.Id == id);
+
+        if (version == null)
+        {
+            return null;
+        }
+
+        var stageLookup = version.VersionHistoryCustomers.ToDictionary(vhc => vhc.CustomerId, vhc => vhc.ReleaseStage);
 
         return new VersionDetailResponse
         {
@@ -526,7 +565,8 @@ public class VersionsController : BaseController
                     Id = vhc.Customer.Id,
                     Name = vhc.Customer.Name,
                     IsActive = vhc.Customer.IsActive,
-                    CountryName = vhc.Customer.Country.Name
+                    CountryName = vhc.Customer.Country.Name,
+                    ReleaseStage = vhc.ReleaseStage
                 })
                 .ToList(),
             Notes = version.HistoryNotes
@@ -540,7 +580,10 @@ public class VersionsController : BaseController
                             Id = hnc.Customer.Id,
                             Name = hnc.Customer.Name,
                             IsActive = hnc.Customer.IsActive,
-                            CountryName = hnc.Customer.Country.Name
+                            CountryName = hnc.Customer.Country.Name,
+                            ReleaseStage = stageLookup.TryGetValue(hnc.CustomerId, out var stage)
+                                ? stage
+                                : CustomerReleaseStage.PreRelease
                         })
                         .ToList()
                 })

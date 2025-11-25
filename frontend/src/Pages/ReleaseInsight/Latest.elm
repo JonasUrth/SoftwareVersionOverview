@@ -4,13 +4,14 @@ import Api.Auth
 import Api.Data
     exposing
         ( Customer
+        , CustomerReleaseStage(..)
         , NoteDetail
         , ReleaseStatus(..)
         , Software
         , SoftwareType(..)
         , VersionDetail
         , customerDecoder
-        , releaseStatusToString
+        , releaseStatusLabel
         , softwareDecoder
         , versionDetailDecoder
         )
@@ -222,10 +223,23 @@ update shared req msg model =
             )
 
         GotLatestRelease (Err err) ->
+            let
+                friendlyError =
+                    case err of
+                        Http.BadStatus statusCode ->
+                            if statusCode == 404 then
+                                "No production-ready release is available for this software and customer."
+
+                            else
+                                httpErrorToString err
+
+                        _ ->
+                            httpErrorToString err
+            in
             ( { model
                 | latestRelease = Nothing
                 , latestLoading = False
-                , latestError = Just (httpErrorToString err)
+                , latestError = Just friendlyError
               }
             , Effect.none
             )
@@ -453,8 +467,14 @@ viewLatestReleaseSection model =
                         case model.latestRelease of
                             Just detail ->
                                 let
+                                    customerStage =
+                                        releaseStageForCustomer detail customerId
+
                                     isProductionReady =
-                                        detail.releaseStatus == ProductionReady
+                                        customerStage == CustomerProductionReady
+
+                                    statusLabel =
+                                        releaseStatusLabel (releaseStatusFromStage customerStage)
                                 in
                                 div [ class "latest-release" ]
                                     [ h2 [] [ text detail.softwareName ]
@@ -474,6 +494,10 @@ viewLatestReleaseSection model =
                                         , p []
                                             [ strong [] [ text "Release date: " ]
                                             , text (formatDate detail.releaseDate)
+                                            ]
+                                        , p []
+                                            [ strong [] [ text "Status: " ]
+                                            , text statusLabel
                                             ]
                                         ]
                                     , p [] [ text ("Released by " ++ detail.releasedByName) ]
@@ -603,6 +627,28 @@ formatDate dateString =
         |> String.split "T"
         |> List.head
         |> Maybe.withDefault dateString
+
+
+releaseStageForCustomer : VersionDetail -> Int -> CustomerReleaseStage
+releaseStageForCustomer detail customerId =
+    detail.customers
+        |> List.filter (\customer -> customer.id == customerId)
+        |> List.head
+        |> Maybe.map .releaseStage
+        |> Maybe.withDefault CustomerPreRelease
+
+
+releaseStatusFromStage : CustomerReleaseStage -> ReleaseStatus
+releaseStatusFromStage stage =
+    case stage of
+        CustomerPreRelease ->
+            PreRelease
+
+        CustomerReleased ->
+            Released
+
+        CustomerProductionReady ->
+            ProductionReady
 
 
 httpErrorToString : Http.Error -> String

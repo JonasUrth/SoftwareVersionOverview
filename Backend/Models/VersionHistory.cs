@@ -6,7 +6,8 @@ public enum ReleaseStatus
 {
     PreRelease,
     Released,
-    ProductionReady
+    ProductionReady,
+    CustomPerCustomer
 }
 
 public class VersionHistory

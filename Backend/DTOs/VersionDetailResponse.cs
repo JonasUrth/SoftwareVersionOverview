@@ -21,6 +21,7 @@ public class CustomerDto
     public string Name { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public string CountryName { get; set; } = string.Empty;
+    public CustomerReleaseStage ReleaseStage { get; set; }
 }
 
 public class NoteDetailDto

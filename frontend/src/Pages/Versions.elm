@@ -1,7 +1,7 @@
 module Pages.Versions exposing (Model, Msg, page)
 
 import Api.Auth
-import Api.Data exposing (ReleaseStatus(..), Version, releaseStatusToString)
+import Api.Data exposing (ReleaseStatus(..), Version, releaseStatusLabel)
 import Api.Endpoint as Endpoint
 import Effect exposing (Effect)
 import Gen.Params.Versions exposing (Params)
@@ -217,7 +217,7 @@ viewVersionRow version =
             ]
         , td []
             [ span [ class ("badge " ++ statusClass version.releaseStatus) ]
-                [ text (releaseStatusToString version.releaseStatus) ]
+                [ text (releaseStatusLabel version.releaseStatus) ]
             ]
         , td [] [ text version.releasedBy ]
         , td [] [ text version.releaseDate ]
@@ -236,3 +236,6 @@ statusClass status =
 
         ProductionReady ->
             "status-production"
+
+        CustomPerCustomer ->
+            "status-custom"

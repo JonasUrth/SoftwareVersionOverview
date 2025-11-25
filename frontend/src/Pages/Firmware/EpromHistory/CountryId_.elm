@@ -298,7 +298,7 @@ viewVersionRow model version =
         , td [] [ text releasedBy ]
         , td []
             [ span [ class ("badge " ++ statusClass version.releaseStatus) ]
-                [ text (Api.Data.releaseStatusToString version.releaseStatus) ]
+                [ text (Api.Data.releaseStatusLabel version.releaseStatus) ]
             ]
         , td [] [ text notesText ]
         ]
@@ -315,6 +315,9 @@ statusClass status =
 
         Api.Data.ProductionReady ->
             "status-production"
+
+        Api.Data.CustomPerCustomer ->
+            "status-custom"
 
 
 hasCountryCustomers : VersionDetail -> List Int -> Bool

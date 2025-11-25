@@ -1,7 +1,7 @@
 module Pages.ReleaseHistory exposing (Model, Msg, page)
 
 import Api.Auth
-import Api.Data exposing (CustomerDetail, NoteDetail, ReleaseStatus(..), Software, Version, VersionDetail, releaseStatusFromString, releaseStatusToString, versionDecoder, versionDetailDecoder)
+import Api.Data exposing (CustomerDetail, CustomerReleaseStage(..), NoteDetail, ReleaseStatus(..), Software, Version, VersionDetail, releaseStatusFromString, releaseStatusLabel, releaseStatusToString, versionDecoder, versionDetailDecoder)
 import Api.Endpoint as Endpoint
 import Dict exposing (Dict)
 import Effect exposing (Effect)
@@ -336,30 +336,34 @@ buildReleaseInsightRows versions versionDetails =
                 Dict.get version.id versionDetails
                     |> Maybe.map
                         (\detail ->
-                            if List.isEmpty detail.customers then
-                                -- If no customers, create one row with empty customer
-                                [ { releaseDate = formatDate detail.releaseDate
-                                  , releasedBy = detail.releasedByName
-                                  , releasedFor = ""
-                                  , notes = formatNotesWithSoftware detail.softwareName detail.notes
-                                  , releaseStatuses = [ detail.releaseStatus ]
-                                  , softwareVersions = Dict.singleton detail.softwareId { version = detail.version, isFromCurrentDate = True }
-                                  }
-                                ]
+                            let
+                                rows =
+                                    if List.isEmpty detail.customers then
+                                        -- If no customers, create one row with empty customer
+                                        [ { releaseDate = formatDate detail.releaseDate
+                                          , releasedBy = detail.releasedByName
+                                          , releasedFor = ""
+                                          , notes = formatNotesWithSoftware detail.softwareName detail.notes
+                                          , releaseStatuses = [ detail.releaseStatus ]
+                                          , softwareVersions = Dict.singleton detail.softwareId { version = detail.version, isFromCurrentDate = True }
+                                          }
+                                        ]
 
-                            else
-                                -- Create one row per customer
-                                List.map
-                                    (\customer ->
-                                        { releaseDate = formatDate detail.releaseDate
-                                        , releasedBy = detail.releasedByName
-                                        , releasedFor = customer.name
-                                        , notes = formatNotesForCustomerWithSoftware detail.softwareName customer.id detail.notes
-                                        , releaseStatuses = [ detail.releaseStatus ]
-                                        , softwareVersions = Dict.singleton detail.softwareId { version = detail.version, isFromCurrentDate = True }
-                                        }
-                                    )
-                                    detail.customers
+                                    else
+                                        -- Create one row per customer with per-customer status
+                                        List.map
+                                            (\customer ->
+                                                { releaseDate = formatDate detail.releaseDate
+                                                , releasedBy = detail.releasedByName
+                                                , releasedFor = customer.name
+                                                , notes = formatNotesForCustomerWithSoftware detail.softwareName customer.id detail.notes
+                                                , releaseStatuses = [ customerStageToReleaseStatus customer.releaseStage ]
+                                                , softwareVersions = Dict.singleton detail.softwareId { version = detail.version, isFromCurrentDate = True }
+                                                }
+                                            )
+                                            detail.customers
+                            in
+                            rows
                         )
             )
         |> List.concat
@@ -509,6 +513,19 @@ combineStatuses statuses1 statuses2 =
         |> List.map releaseStatusFromString
 
 
+customerStageToReleaseStatus : CustomerReleaseStage -> ReleaseStatus
+customerStageToReleaseStatus stage =
+    case stage of
+        CustomerPreRelease ->
+            PreRelease
+
+        CustomerReleased ->
+            Released
+
+        CustomerProductionReady ->
+            ProductionReady
+
+
 fillMissingVersions : List Software -> List ReleaseInsightRow -> List ReleaseInsightRow
 fillMissingVersions softwareList rows =
     let
@@ -620,13 +637,13 @@ sortRows model softwareList rows =
                             let
                                 status1 =
                                     row1.releaseStatuses
-                                        |> List.map releaseStatusToString
+                                        |> List.map releaseStatusLabel
                                         |> String.join ", "
                                         |> String.toLower
 
                                 status2 =
                                     row2.releaseStatuses
-                                        |> List.map releaseStatusToString
+                                        |> List.map releaseStatusLabel
                                         |> String.join ", "
                                         |> String.toLower
                             in
@@ -675,7 +692,7 @@ filterRows model softwareList rows =
                         String.isEmpty model.filterStatus
                             || List.any
                                 (\status ->
-                                    String.contains (String.toLower model.filterStatus) (String.toLower (releaseStatusToString status))
+                                    String.contains (String.toLower model.filterStatus) (String.toLower (releaseStatusLabel status))
                                 )
                                 row.releaseStatuses
 
@@ -844,7 +861,7 @@ viewReleaseRow softwareList row =
                     (List.map
                         (\status ->
                             span [ class ("badge " ++ statusClass status), style "margin-right" "4px" ]
-                                [ text (releaseStatusToString status) ]
+                                [ text (releaseStatusLabel status) ]
                         )
                         row.releaseStatuses
                     )
@@ -863,3 +880,6 @@ statusClass status =
 
         ProductionReady ->
             "status-production"
+
+        CustomPerCustomer ->
+            "status-custom"

@@ -205,6 +205,62 @@ type ReleaseStatus
     = PreRelease
     | Released
     | ProductionReady
+    | CustomPerCustomer
+
+
+type CustomerReleaseStage
+    = CustomerPreRelease
+    | CustomerReleased
+    | CustomerProductionReady
+
+
+customerReleaseStageToString : CustomerReleaseStage -> String
+customerReleaseStageToString stage =
+    case stage of
+        CustomerPreRelease ->
+            "PreRelease"
+
+        CustomerReleased ->
+            "Released"
+
+        CustomerProductionReady ->
+            "ProductionReady"
+
+
+customerReleaseStageFromString : String -> CustomerReleaseStage
+customerReleaseStageFromString str =
+    case str of
+        "PreRelease" ->
+            CustomerPreRelease
+
+        "Released" ->
+            CustomerReleased
+
+        "ProductionReady" ->
+            CustomerProductionReady
+
+        _ ->
+            CustomerReleased
+
+
+customerReleaseStageDecoder : Decoder CustomerReleaseStage
+customerReleaseStageDecoder =
+    Decode.string
+        |> Decode.andThen
+            (\str ->
+                case str of
+                    "PreRelease" ->
+                        Decode.succeed CustomerPreRelease
+
+                    "Released" ->
+                        Decode.succeed CustomerReleased
+
+                    "ProductionReady" ->
+                        Decode.succeed CustomerProductionReady
+
+                    _ ->
+                        Decode.fail ("Unknown customer release stage: " ++ str)
+            )
 
 
 releaseStatusToString : ReleaseStatus -> String
@@ -219,6 +275,25 @@ releaseStatusToString status =
         ProductionReady ->
             "ProductionReady"
 
+        CustomPerCustomer ->
+            "CustomPerCustomer"
+
+
+releaseStatusLabel : ReleaseStatus -> String
+releaseStatusLabel status =
+    case status of
+        PreRelease ->
+            "Pre-Release"
+
+        Released ->
+            "Released"
+
+        ProductionReady ->
+            "Production Ready"
+
+        CustomPerCustomer ->
+            "Individual Customer Releases"
+
 
 releaseStatusFromString : String -> ReleaseStatus
 releaseStatusFromString str =
@@ -231,6 +306,9 @@ releaseStatusFromString str =
 
         "ProductionReady" ->
             ProductionReady
+
+        "CustomPerCustomer" ->
+            CustomPerCustomer
 
         _ ->
             Released
@@ -250,6 +328,9 @@ releaseStatusDecoder =
 
                     "ProductionReady" ->
                         Decode.succeed ProductionReady
+
+                    "CustomPerCustomer" ->
+                        Decode.succeed CustomPerCustomer
 
                     _ ->
                         Decode.fail ("Unknown release status: " ++ str)
@@ -289,16 +370,18 @@ type alias CustomerDetail =
     , name : String
     , isActive : Bool
     , countryName : String
+    , releaseStage : CustomerReleaseStage
     }
 
 
 customerDetailDecoder : Decoder CustomerDetail
 customerDetailDecoder =
-    Decode.map4 CustomerDetail
+    Decode.map5 CustomerDetail
         (Decode.field "id" Decode.int)
         (Decode.field "name" Decode.string)
         (Decode.field "isActive" Decode.bool)
         (Decode.field "countryName" Decode.string)
+        (Decode.field "releaseStage" customerReleaseStageDecoder)
 
 
 type alias NoteDetail =
@@ -365,6 +448,7 @@ type alias CreateVersionRequest =
     , releaseDate : String
     , releaseStatus : ReleaseStatus
     , customerIds : List Int
+    , customerStages : List CustomerStageInput
     , notes : List NoteInput
     , preReleaseBy : Maybe Int
     , preReleaseDate : Maybe String
@@ -381,6 +465,12 @@ type alias NoteInput =
     }
 
 
+type alias CustomerStageInput =
+    { customerId : Int
+    , releaseStage : CustomerReleaseStage
+    }
+
+
 createVersionEncoder : CreateVersionRequest -> Encode.Value
 createVersionEncoder data =
     Encode.object
@@ -389,6 +479,7 @@ createVersionEncoder data =
         , ( "releaseDate", Encode.string data.releaseDate )
         , ( "releaseStatus", Encode.string (releaseStatusToString data.releaseStatus) )
         , ( "customerIds", Encode.list Encode.int data.customerIds )
+        , ( "customerStages", Encode.list customerStageInputEncoder data.customerStages )
         , ( "notes", Encode.list noteInputEncoder data.notes )
         , ( "preReleaseBy", Maybe.withDefault Encode.null (Maybe.map Encode.int data.preReleaseBy) )
         , ( "preReleaseDate", Maybe.withDefault Encode.null (Maybe.map Encode.string data.preReleaseDate) )
@@ -407,6 +498,14 @@ noteInputEncoder note =
         ]
 
 
+customerStageInputEncoder : CustomerStageInput -> Encode.Value
+customerStageInputEncoder stage =
+    Encode.object
+        [ ( "customerId", Encode.int stage.customerId )
+        , ( "releaseStage", Encode.string (customerReleaseStageToString stage.releaseStage) )
+        ]
+
+
 -- UPDATE VERSION REQUEST
 
 
@@ -415,6 +514,7 @@ type alias UpdateVersionRequest =
     , releaseDate : String
     , releaseStatus : ReleaseStatus
     , customerIds : List Int
+    , customerStages : List CustomerStageInput
     , notes : List UpdateNoteInput
     }
 
@@ -433,6 +533,7 @@ updateVersionEncoder data =
         , ( "releaseDate", Encode.string data.releaseDate )
         , ( "releaseStatus", Encode.string (releaseStatusToString data.releaseStatus) )
         , ( "customerIds", Encode.list Encode.int data.customerIds )
+        , ( "customerStages", Encode.list customerStageInputEncoder data.customerStages )
         , ( "notes", Encode.list updateNoteInputEncoder data.notes )
         ]
 
