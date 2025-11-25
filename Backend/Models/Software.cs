@@ -16,6 +16,9 @@ public class Software
 
     public ReleaseMethod? ReleaseMethod { get; set; }
 
+    [Required]
+    public bool IsActive { get; set; } = true;
+
     // Navigation properties
     public ICollection<VersionHistory> VersionHistories { get; set; } = new List<VersionHistory>();
 }

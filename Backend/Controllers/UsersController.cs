@@ -96,7 +96,8 @@ public class UsersController : ControllerBase
             return NotFound();
         }
 
-        _context.Users.Remove(user);
+        // Soft delete
+        user.IsActive = false;
         await _context.SaveChangesAsync();
 
         return NoContent();

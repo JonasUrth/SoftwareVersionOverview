@@ -21,16 +21,24 @@ public class SoftwareController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<object>>> GetAll()
+    public async Task<ActionResult<IEnumerable<object>>> GetAll([FromQuery] bool includeInactive = false)
     {
-        var software = await _context.Softwares
+        var query = _context.Softwares.AsQueryable();
+        
+        if (!includeInactive)
+        {
+            query = query.Where(s => s.IsActive);
+        }
+        
+        var software = await query
             .Select(s => new
             {
                 s.Id,
                 s.Name,
                 Type = s.Type.ToString(),
                 s.FileLocation,
-                ReleaseMethod = s.ReleaseMethod != null ? s.ReleaseMethod.ToString() : null
+                ReleaseMethod = s.ReleaseMethod != null ? s.ReleaseMethod.ToString() : null,
+                s.IsActive
             })
             .ToListAsync();
 
@@ -115,7 +123,8 @@ public class SoftwareController : ControllerBase
             return NotFound();
         }
 
-        _context.Softwares.Remove(software);
+        // Soft delete
+        software.IsActive = false;
         await _context.SaveChangesAsync();
 
         return NoContent();

@@ -12,6 +12,7 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput, preventDefaultOn)
 import Http
 import Json.Decode as Decode
+import Json.Encode as Encode
 import Layouts.Default
 import Page
 import Request
@@ -143,6 +144,7 @@ type Msg
     | FilterStatusChanged String
     | FilterSoftwareVersionChanged Int String
     | SortColumnClicked SortColumn
+    | PrintRequested
 
 
 update : Shared.Model -> Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -249,6 +251,9 @@ update shared req msg model =
             in
             ( { model | sortColumn = Just column, sortDirection = newDirection }, Effect.none )
 
+        PrintRequested ->
+            ( model, Effect.fromShared Shared.PrintPage )
+
 
 -- SUBSCRIPTIONS
 
@@ -271,15 +276,23 @@ view shared req model =
             [ div [ class "header" ]
                 [ h1 [] [ text "Release History" ]
                 , p [ class "subtitle" ] [ text "Complete list of all releases with history notes and customers" ]
-                , label [ style "display" "flex", style "align-items" "center", style "gap" "8px", style "margin-top" "12px" ]
-                    [ input
-                        [ type_ "checkbox"
-                        , checked model.compactView
-                        , onClick ToggleCompactView
-                        , style "cursor" "pointer"
+                , div [ style "display" "flex", style "align-items" "center", style "gap" "12px", style "margin-top" "12px" ]
+                    [ label [ style "display" "flex", style "align-items" "center", style "gap" "8px" ]
+                        [ input
+                            [ type_ "checkbox"
+                            , checked model.compactView
+                            , onClick ToggleCompactView
+                            , style "cursor" "pointer"
+                            ]
+                            []
+                        , text "Compact view (group by date and customer)"
                         ]
-                        []
-                    , text "Compact view (group by date and customer)"
+                    , button
+                        [ class "print-button"
+                        , onClick PrintRequested
+                        , title "Print the filtered and sorted release history"
+                        ]
+                        [ text "🖨️ Print" ]
                     ]
                 ]
             , div [ class "full-width-content" ]
@@ -838,16 +851,54 @@ viewFilterInputCell model column attrs inputField =
 
 filterInput : String -> (String -> Msg) -> Html Msg
 filterInput value_ onChange =
-    input
-        [ type_ "text"
-        , placeholder "Filter..."
-        , value value_
-        , onInput onChange
-        , style "width" "100%"
-        , style "padding" "4px"
-        , style "box-sizing" "border-box"
+    let
+        hasFilter =
+            not (String.isEmpty (String.trim value_))
+
+        inputAttrs =
+            [ type_ "text"
+            , placeholder "Filter..."
+            , value value_
+            , onInput onChange
+            , style "width" "100%"
+            , style "padding" "4px"
+            , style "padding-right" "2rem"
+            , style "box-sizing" "border-box"
+            ]
+                ++ (if hasFilter then
+                        [ style "border-color" "#dc2626"
+                        , style "background-color" "#fff5f5"
+                        ]
+
+                    else
+                        []
+                   )
+    in
+    div
+        [ style "position" "relative"
+        , style "display" "flex"
         ]
-        []
+        [ input inputAttrs []
+        , button
+            [ type_ "button"
+            , class "btn-small"
+            , onClick (onChange "")
+            , disabled (not hasFilter)
+            , title "Clear filter"
+            , style "position" "absolute"
+            , style "right" "0.25rem"
+            , style "top" "50%"
+            , style "transform" "translateY(-50%)"
+            , style "border" "none"
+            , style "background" "transparent"
+            , style "font-size" "1.25rem"
+            , style "cursor" (if hasFilter then "pointer" else "default")
+            , style "color" (if hasFilter then "#b91c1c" else "#94a3b8")
+            , style "padding" "0"
+            , style "line-height" "1"
+            ]
+            [ text "×" ]
+        ]
 
 
 viewReleaseTable : Model -> List Software -> List ReleaseInsightRow -> Html Msg

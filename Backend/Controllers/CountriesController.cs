@@ -18,14 +18,22 @@ public class CountriesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<object>>> GetAll()
+    public async Task<ActionResult<IEnumerable<object>>> GetAll([FromQuery] bool includeInactive = false)
     {
-        var countries = await _context.Countries
+        var query = _context.Countries.AsQueryable();
+        
+        if (!includeInactive)
+        {
+            query = query.Where(c => c.IsActive);
+        }
+        
+        var countries = await query
             .Select(c => new
             {
                 c.Id,
                 c.Name,
-                c.FirmwareReleaseNote
+                c.FirmwareReleaseNote,
+                c.IsActive
             })
             .ToListAsync();
 
@@ -112,7 +120,8 @@ public class CountriesController : ControllerBase
             return NotFound();
         }
 
-        _context.Countries.Remove(country);
+        // Soft delete
+        country.IsActive = false;
         await _context.SaveChangesAsync();
 
         return NoContent();

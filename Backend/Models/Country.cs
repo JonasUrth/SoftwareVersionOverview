@@ -11,6 +11,9 @@ public class Country
 
     public string? FirmwareReleaseNote { get; set; }
 
+    [Required]
+    public bool IsActive { get; set; } = true;
+
     // Navigation properties
     public ICollection<Customer> Customers { get; set; } = new List<Customer>();
 }

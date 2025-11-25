@@ -25,6 +25,13 @@
 
     // Send initial localStorage value to Elm
     app.ports.load.send(flags ? JSON.parse(flags) : null)
+
+    // Handle print requests
+    if (app.ports.printPage) {
+      app.ports.printPage.subscribe(function() {
+        window.print()
+      })
+    }
   </script>
 </body>
 </html>

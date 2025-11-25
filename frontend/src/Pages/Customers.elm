@@ -39,6 +39,7 @@ type alias Model =
     , formRequiresValidation : Bool
     , editingId : Maybe Int
     , error : Maybe String
+    , showInactive : Bool
     }
 
 
@@ -51,11 +52,12 @@ init shared req =
       , formRequiresValidation = False
       , editingId = Nothing
       , error = Nothing
+      , showInactive = False
       }
     , case shared.user of
         Just _ ->
             if List.isEmpty shared.customers then
-                Effect.fromShared Shared.RefreshCustomers
+                Effect.fromShared (Shared.RefreshCustomersWithInactive False)
 
             else
                 Effect.none
@@ -83,6 +85,7 @@ type Msg
     | EditCustomer Customer
     | DeleteCustomer Int
     | CustomerDeleted Int (Result Http.Error ())
+    | ToggleShowInactive
     | NavigateToRoute Route.Route
     | LogoutRequested
     | LogoutResponse (Result Http.Error ())
@@ -207,10 +210,15 @@ update req msg model =
             )
 
         CustomerDeleted id (Ok ()) ->
-            ( model, Effect.fromShared Shared.RefreshCustomers )
+            ( model, Effect.fromShared (Shared.RefreshCustomersWithInactive model.showInactive) )
 
         CustomerDeleted id (Err _) ->
-            ( { model | error = Just "Failed to delete customer" }, Effect.none )
+            ( { model | error = Just "Failed to update customer" }, Effect.none )
+
+        ToggleShowInactive ->
+            ( { model | showInactive = not model.showInactive }
+            , Effect.fromShared (Shared.RefreshCustomersWithInactive (not model.showInactive))
+            )
 
         NavigateToRoute route ->
             ( model, Effect.fromCmd (Request.pushRoute route req) )
@@ -278,6 +286,7 @@ view shared req model =
                         , button [ class "btn-primary", onClick ShowAddForm ] [ text "+ Add Customer" ]
                         ]
                     , viewError model.error
+                    , viewFilterBar model
                     , if model.showForm then
                         viewForm shared model
 
@@ -298,6 +307,21 @@ viewError error =
 
         Nothing ->
             text ""
+
+
+viewFilterBar : Model -> Html Msg
+viewFilterBar model =
+    div [ class "filter-bar", style "padding" "1rem", style "background" "#f8f9fa", style "margin-bottom" "1rem", style "border-radius" "4px" ]
+        [ label [ style "display" "flex", style "align-items" "center", style "gap" "0.5rem", style "cursor" "pointer" ]
+            [ input
+                [ type_ "checkbox"
+                , checked model.showInactive
+                , onClick ToggleShowInactive
+                ]
+                []
+            , text "Show Inactive Customers"
+            ]
+        ]
 
 
 viewForm : Shared.Model -> Model -> Html Msg
@@ -396,7 +420,11 @@ viewCustomers customers =
 
 viewCustomerRow : Customer -> Html Msg
 viewCustomerRow customer =
-    tr []
+    tr
+        [ classList
+            [ ( "inactive", not customer.isActive )
+            ]
+        ]
         [ td [] [ text customer.name ]
         , td [] [ text customer.country.name ]
         , td []
@@ -421,6 +449,5 @@ viewCustomerRow customer =
         , td [] [ text (if customer.requiresCustomerValidation then "Yes" else "No") ]
         , td [ class "actions" ]
             [ button [ class "btn-small", onClick (EditCustomer customer) ] [ text "Edit" ]
-            , button [ class "btn-small btn-danger", onClick (DeleteCustomer customer.id) ] [ text "Delete" ]
             ]
         ]

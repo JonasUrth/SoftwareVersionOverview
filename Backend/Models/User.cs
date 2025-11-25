@@ -12,6 +12,9 @@ public class User
     [Required]
     public string Password { get; set; } = string.Empty;
 
+    [Required]
+    public bool IsActive { get; set; } = true;
+
     // Navigation properties
     public ICollection<VersionHistory> VersionHistories { get; set; } = new List<VersionHistory>();
 }

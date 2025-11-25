@@ -18,11 +18,11 @@ public class CustomersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<object>>> GetAll([FromQuery] bool? activeOnly = true)
+    public async Task<ActionResult<IEnumerable<object>>> GetAll([FromQuery] bool includeInactive = false)
     {
         var query = _context.Customers.Include(c => c.Country).AsQueryable();
 
-        if (activeOnly == true)
+        if (!includeInactive)
         {
             query = query.Where(c => c.IsActive);
         }

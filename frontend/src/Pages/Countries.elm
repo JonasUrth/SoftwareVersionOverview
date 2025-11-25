@@ -71,9 +71,8 @@ type Msg
     | NoteChanged String
     | FormSubmitted
     | CountryCreated (Result Http.Error Country)
+    | CountryUpdated (Result Http.Error ())
     | EditCountry Country
-    | DeleteCountry Int
-    | CountryDeleted Int (Result Http.Error ())
     | NavigateToRoute Route.Route
     | LogoutRequested
     | LogoutResponse (Result Http.Error ())
@@ -95,10 +94,37 @@ update req msg model =
             ( { model | formNote = note }, Effect.none )
 
         FormSubmitted ->
+            let
+                endpoint =
+                    case model.editingId of
+                        Just id ->
+                            Endpoint.countries [ String.fromInt id ]
+
+                        Nothing ->
+                            Endpoint.countries []
+
+                method =
+                    case model.editingId of
+                        Just _ ->
+                            "PUT"
+
+                        Nothing ->
+                            "POST"
+
+                expect =
+                    case model.editingId of
+                        Just _ ->
+                            Http.expectWhatever CountryUpdated
+
+                        Nothing ->
+                            Http.expectJson CountryCreated countryDecoder
+            in
             ( model
             , Effect.fromCmd <|
-                Http.post
-                    { url = Endpoint.countries []
+                Http.request
+                    { method = method
+                    , headers = []
+                    , url = endpoint
                     , body =
                         Http.jsonBody <|
                             countryEncoder
@@ -110,7 +136,9 @@ update req msg model =
                                     else
                                         Just model.formNote
                                 }
-                    , expect = Http.expectJson CountryCreated countryDecoder
+                    , expect = expect
+                    , timeout = Nothing
+                    , tracker = Nothing
                     }
             )
 
@@ -127,6 +155,20 @@ update req msg model =
         CountryCreated (Err _) ->
             ( { model | error = Just "Failed to create country" }, Effect.none )
 
+        CountryUpdated (Ok ()) ->
+            ( { model
+                | showForm = False
+                , formName = ""
+                , formNote = ""
+                , editingId = Nothing
+                , error = Nothing
+              }
+            , Effect.fromShared Shared.RefreshCountries
+            )
+
+        CountryUpdated (Err _) ->
+            ( { model | error = Just "Failed to update country" }, Effect.none )
+
         EditCountry country ->
             ( { model
                 | showForm = True
@@ -136,26 +178,6 @@ update req msg model =
               }
             , Effect.none
             )
-
-        DeleteCountry id ->
-            ( model
-            , Effect.fromCmd <|
-                Http.request
-                    { method = "DELETE"
-                    , headers = []
-                    , url = Endpoint.countries [ String.fromInt id ]
-                    , body = Http.emptyBody
-                    , expect = Http.expectWhatever (CountryDeleted id)
-                    , timeout = Nothing
-                    , tracker = Nothing
-                    }
-            )
-
-        CountryDeleted id (Ok ()) ->
-            ( model, Effect.fromShared Shared.RefreshCountries )
-
-        CountryDeleted id (Err _) ->
-            ( { model | error = Just "Failed to delete country" }, Effect.none )
 
         NavigateToRoute route ->
             ( model, Effect.fromCmd (Request.pushRoute route req) )
@@ -309,11 +331,14 @@ viewCountries countries =
 
 viewCountryRow : Country -> Html Msg
 viewCountryRow country =
-    tr []
+    tr
+        [ classList
+            [ ( "inactive", not country.isActive )
+            ]
+        ]
         [ td [] [ text country.name ]
         , td [] [ text (Maybe.withDefault "-" country.firmwareReleaseNote) ]
         , td [ class "actions" ]
             [ button [ class "btn-small", onClick (EditCountry country) ] [ text "Edit" ]
-            , button [ class "btn-small btn-danger", onClick (DeleteCountry country.id) ] [ text "Delete" ]
             ]
         ]

@@ -78,8 +78,6 @@ type Msg
     | SoftwareCreated (Result Http.Error Software)
     | EditSoftware Software
     | SoftwareUpdated Int (Result Http.Error ())
-    | DeleteSoftware Int
-    | SoftwareDeleted Int (Result Http.Error ())
     | NavigateToRoute Route.Route
     | LogoutRequested
     | LogoutResponse (Result Http.Error ())
@@ -221,26 +219,6 @@ update req msg model =
 
         SoftwareUpdated _ (Err err) ->
             ( { model | error = Just ("Failed to update software: " ++ httpErrorToString err) }, Effect.none )
-
-        DeleteSoftware id ->
-            ( model
-            , Effect.fromCmd <|
-                Http.request
-                    { method = "DELETE"
-                    , headers = []
-                    , url = Endpoint.software [ String.fromInt id ]
-                    , body = Http.emptyBody
-                    , expect = Http.expectWhatever (SoftwareDeleted id)
-                    , timeout = Nothing
-                    , tracker = Nothing
-                    }
-            )
-
-        SoftwareDeleted _ (Ok ()) ->
-            ( model, Effect.fromShared Shared.RefreshSoftware )
-
-        SoftwareDeleted _ (Err _) ->
-            ( { model | error = Just "Failed to delete" }, Effect.none )
 
         NavigateToRoute route ->
             ( model, Effect.fromCmd (Request.pushRoute route req) )
@@ -415,12 +393,15 @@ viewSoftwareList software =
 
 viewSoftwareRow : Software -> Html Msg
 viewSoftwareRow sw =
-    tr []
+    tr
+        [ classList
+            [ ( "inactive", not sw.isActive )
+            ]
+        ]
         [ td [] [ text sw.name ]
         , td [] [ text (formatSoftwareType sw.type_) ]
         , td [ class "actions" ]
             [ button [ class "btn-small", onClick (EditSoftware sw) ] [ text "Edit" ]
-            , button [ class "btn-small btn-danger", onClick (DeleteSoftware sw.id) ] [ text "Delete" ]
             ]
         ]
 

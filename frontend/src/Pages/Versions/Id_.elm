@@ -18,8 +18,6 @@ import Api.VersionsForm as Form
 import Request
 import Shared
 import Versions.ReleasePath as ReleasePath
-import Task
-import Time exposing (Posix)
 import View exposing (View)
 
 
@@ -115,6 +113,7 @@ type Msg
     | ReleaseStatusChanged String
     | ToggleCustomer Int
     | ToggleCountry Bool (List Int)
+    | ToggleAllCustomers Bool (List Int)
     | CountryFilterChanged String
     | CustomerFilterChanged String
     | CustomerStageChanged Int String
@@ -220,6 +219,45 @@ update req msg model =
 
                     else
                         List.filter (\cid -> not (List.member cid customerIds)) form.selectedCustomers
+
+                syncedStages =
+                    syncCustomerStages form.releaseStatus newSelected form.customerStages
+            in
+            withReleasePathCheck
+                ( { model | form = { form | selectedCustomers = newSelected, customerStages = syncedStages } }
+                , Effect.none
+                )
+
+        ToggleAllCustomers checked customerIds ->
+            let
+                form = model.form
+                uniqueIds =
+                    List.foldl
+                        (\cid acc ->
+                            if List.member cid acc then
+                                acc
+
+                            else
+                                cid :: acc
+                        )
+                        []
+                        customerIds
+
+                newSelected =
+                    if checked then
+                        List.foldl
+                            (\cid acc ->
+                                if List.member cid acc then
+                                    acc
+
+                                else
+                                    cid :: acc
+                            )
+                            form.selectedCustomers
+                            uniqueIds
+
+                    else
+                        List.filter (\cid -> not (List.member cid uniqueIds)) form.selectedCustomers
 
                 syncedStages =
                     syncCustomerStages form.releaseStatus newSelected form.customerStages
@@ -721,17 +759,82 @@ viewCountrySelection form countries enabled =
     let
         filtered =
             Form.filterCountryGroups form.countryFilter form countries
-    in
-    div [ class "country-selection", style "flex" "1" ]
-        [ h4 [] [ text "By Country" ]
-        , input
+
+        selectAllIds =
+            List.foldl
+                (\country acc ->
+                    List.foldl
+                        (\cid innerAcc ->
+                            if List.member cid innerAcc then
+                                innerAcc
+
+                            else
+                                cid :: innerAcc
+                        )
+                        acc
+                        country.customerIds
+                )
+                []
+                filtered
+
+        allSelected =
+            (not (List.isEmpty selectAllIds))
+                && List.all (\cid -> List.member cid form.selectedCustomers) selectAllIds
+
+        hasFilter =
+            not (String.isEmpty (String.trim form.countryFilter))
+
+        inputAttrs =
             [ type_ "text"
             , placeholder "Search countries..."
             , value form.countryFilter
             , onInput CountryFilterChanged
             , disabled (not enabled)
             ]
-            []
+                ++ (if hasFilter then
+                        [ style "border-color" "#dc2626"
+                        , style "background-color" "#fff5f5"
+                        ]
+
+                    else
+                        [])
+    in
+    div [ class "country-selection", style "flex" "1" ]
+        [ h4 [] [ text "By Country" ]
+        , div
+            [ style "position" "relative"
+            , style "display" "flex"
+            ]
+            [ input (inputAttrs ++ [ style "width" "100%", style "padding-right" "2.5rem" ]) []
+            , button
+                [ type_ "button"
+                , class "btn-small"
+                , onClick (CountryFilterChanged "")
+                , disabled (not enabled || not hasFilter)
+                , title "Clear country filter"
+                , style "position" "absolute"
+                , style "right" "0.5rem"
+                , style "top" "50%"
+                , style "transform" "translateY(-50%)"
+                , style "border" "none"
+                , style "background" "transparent"
+                , style "font-size" "1.25rem"
+                , style "cursor" (if enabled && hasFilter then "pointer" else "default")
+                , style "color" (if hasFilter then "#b91c1c" else "#94a3b8")
+                , style "padding" "0"
+                ]
+                [ text "×" ]
+            ]
+        , label [ class "checkbox-label" ]
+            [ input
+                [ type_ "checkbox"
+                , checked allSelected
+                , onCheck (\checked -> ToggleCountry checked selectAllIds)
+                , disabled (not enabled || List.isEmpty selectAllIds)
+                ]
+                []
+            , text " Select all"
+            ]
         , div 
             [ class "customer-checkboxes"
             , style "max-height" "300px"
@@ -766,17 +869,77 @@ viewCustomerList form customers enabled =
     let
         filtered =
             Form.filterCustomers form.customerFilter customers
-    in
-    div [ class "customer-selection", style "flex" "1" ]
-        [ h4 [] [ text "Individual Customers" ]
-        , input
+
+        selectAllIds =
+            List.foldl
+                (\customer acc ->
+                    if List.member customer.id acc then
+                        acc
+
+                    else
+                        customer.id :: acc
+                )
+                []
+                filtered
+
+        allSelected =
+            (not (List.isEmpty selectAllIds))
+                && List.all (\cid -> List.member cid form.selectedCustomers) selectAllIds
+
+        hasFilter =
+            not (String.isEmpty (String.trim form.customerFilter))
+
+        inputAttrs =
             [ type_ "text"
             , placeholder "Search customers..."
             , value form.customerFilter
             , onInput CustomerFilterChanged
             , disabled (not enabled)
             ]
-            []
+                ++ (if hasFilter then
+                        [ style "border-color" "#dc2626"
+                        , style "background-color" "#fff5f5"
+                        ]
+
+                    else
+                        [])
+    in
+    div [ class "customer-selection", style "flex" "1" ]
+        [ h4 [] [ text "Individual Customers" ]
+        , div
+            [ style "position" "relative"
+            , style "display" "flex"
+            ]
+            [ input (inputAttrs ++ [ style "width" "100%", style "padding-right" "2.5rem" ]) []
+            , button
+                [ type_ "button"
+                , class "btn-small"
+                , onClick (CustomerFilterChanged "")
+                , disabled (not enabled || not hasFilter)
+                , title "Clear customer filter"
+                , style "position" "absolute"
+                , style "right" "0.5rem"
+                , style "top" "50%"
+                , style "transform" "translateY(-50%)"
+                , style "border" "none"
+                , style "background" "transparent"
+                , style "font-size" "1.25rem"
+                , style "cursor" (if enabled && hasFilter then "pointer" else "default")
+                , style "color" (if hasFilter then "#b91c1c" else "#94a3b8")
+                , style "padding" "0"
+                ]
+                [ text "×" ]
+            ]
+        , label [ class "checkbox-label" ]
+            [ input
+                [ type_ "checkbox"
+                , checked allSelected
+                , onCheck (\checked -> ToggleAllCustomers checked selectAllIds)
+                , disabled (not enabled || List.isEmpty selectAllIds)
+                ]
+                []
+            , text " Select all"
+            ]
         , div 
             [ class "customer-checkboxes"
             , style "max-height" "300px"

@@ -44,15 +44,17 @@ type alias Country =
     { id : Int
     , name : String
     , firmwareReleaseNote : Maybe String
+    , isActive : Bool
     }
 
 
 countryDecoder : Decoder Country
 countryDecoder =
-    Decode.map3 Country
+    Decode.map4 Country
         (Decode.field "id" Decode.int)
         (Decode.field "name" Decode.string)
         (Decode.maybe (Decode.field "firmwareReleaseNote" Decode.string))
+        (Decode.field "isActive" Decode.bool |> Decode.maybe |> Decode.map (Maybe.withDefault True))
 
 
 countryEncoder : { name : String, firmwareReleaseNote : Maybe String } -> Encode.Value
@@ -231,17 +233,19 @@ type alias Software =
     , type_ : SoftwareType
     , fileLocation : Maybe String
     , releaseMethod : Maybe ReleaseMethod
+    , isActive : Bool
     }
 
 
 softwareDecoder : Decoder Software
 softwareDecoder =
-    Decode.map5 Software
+    Decode.map6 Software
         (Decode.field "id" Decode.int)
         (Decode.field "name" Decode.string)
         (Decode.field "type" softwareTypeDecoder)
         (Decode.maybe (Decode.field "fileLocation" Decode.string))
         (Decode.maybe (Decode.field "releaseMethod" releaseMethodDecoder))
+        (Decode.field "isActive" Decode.bool |> Decode.maybe |> Decode.map (Maybe.withDefault True))
 
 
 softwareEncoder : { name : String, type_ : SoftwareType, fileLocation : Maybe String, releaseMethod : Maybe ReleaseMethod } -> Encode.Value

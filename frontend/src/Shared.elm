@@ -75,8 +75,10 @@ type Msg
     | UserLoggedOut
     | RefreshCountries
     | RefreshCustomers
+    | RefreshCustomersWithInactive Bool
     | RefreshSoftware
     | StorageLoaded Decode.Value
+    | PrintPage
 
 
 update : Request -> Msg -> Model -> ( Model, Cmd Msg )
@@ -87,7 +89,7 @@ update _ msg model =
             , if response.authenticated then
                 Cmd.batch
                     [ fetchCountries model.token
-                    , fetchCustomers model.token
+                    , fetchCustomers model.token False
                     , fetchSoftware model.token
                     ]
 
@@ -121,7 +123,7 @@ update _ msg model =
             , Cmd.batch
                 [ save { token = Just token }
                 , fetchCountries (Just token)
-                , fetchCustomers (Just token)
+                , fetchCustomers (Just token) False
                 , fetchSoftware (Just token)
                 ]
             )
@@ -151,10 +153,16 @@ update _ msg model =
             ( model, fetchCountries model.token )
 
         RefreshCustomers ->
-            ( model, fetchCustomers model.token )
+            ( model, fetchCustomers model.token False )
+
+        RefreshCustomersWithInactive includeInactive ->
+            ( model, fetchCustomers model.token includeInactive )
 
         RefreshSoftware ->
             ( model, fetchSoftware model.token )
+
+        PrintPage ->
+            ( model, Ports.printPage () )
 
 
 -- SUBSCRIPTIONS
@@ -227,12 +235,19 @@ fetchCountries token =
         }
 
 
-fetchCustomers : Maybe String -> Cmd Msg
-fetchCustomers token =
+fetchCustomers : Maybe String -> Bool -> Cmd Msg
+fetchCustomers token includeInactive =
+    let
+        url =
+            if includeInactive then
+                "http://localhost:5000/api/customers?includeInactive=true"
+            else
+                "http://localhost:5000/api/customers"
+    in
     Http.request
         { method = "GET"
         , headers = authHeader token
-        , url = "http://localhost:5000/api/customers"
+        , url = url
         , body = Http.emptyBody
         , expect = Http.expectJson GotCustomers (Decode.list Api.Data.customerDecoder)
         , timeout = Nothing

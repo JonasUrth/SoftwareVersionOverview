@@ -29,6 +29,7 @@ public class ApplicationDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).IsRequired();
+            entity.Property(e => e.IsActive).IsRequired().HasDefaultValue(true);
         });
 
         // Customer configuration
@@ -52,6 +53,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.Name).IsRequired();
             entity.HasIndex(e => e.Name).IsUnique();
             entity.Property(e => e.Password).IsRequired();
+            entity.Property(e => e.IsActive).IsRequired().HasDefaultValue(true);
         });
 
         // Software configuration
@@ -60,6 +62,7 @@ public class ApplicationDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).IsRequired();
             entity.Property(e => e.Type).IsRequired();
+            entity.Property(e => e.IsActive).IsRequired().HasDefaultValue(true);
         });
 
         // VersionHistory configuration

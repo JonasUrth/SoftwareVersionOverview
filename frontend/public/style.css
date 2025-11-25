@@ -241,6 +241,20 @@ td.actions {
     white-space: nowrap;
 }
 
+/* Inactive rows styling */
+tr.inactive {
+    opacity: 0.5;
+    background-color: #f5f5f5;
+}
+
+tr.inactive:hover {
+    background-color: #ececec;
+}
+
+tr.inactive td {
+    color: #95a5a6;
+}
+
 /* Release Insight Table Column Widths */
 .release-insight-table th.software-col,
 .release-insight-table td.software-col {
@@ -671,4 +685,210 @@ nav a:hover {
     color: #7f8c8d;
     font-size: 0.9rem;
     margin-bottom: 1rem;
+}
+
+/* Print Button */
+.print-button {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    background: #34495e;
+    color: white;
+    transition: all 0.2s;
+    margin-left: 12px;
+}
+
+.print-button:hover {
+    background: #2c3e50;
+}
+
+/* Print Styles */
+@media print {
+    /* Hide UI elements */
+    .sidebar,
+    .btn-primary,
+    .btn-secondary,
+    .print-button,
+    .filter-row,
+    .sort-indicator {
+        display: none !important;
+    }
+
+    /* Reset layout for printing */
+    body {
+        background: white;
+    }
+
+    .layout-container {
+        display: block;
+    }
+
+    .main-content {
+        margin-left: 0;
+        width: 100%;
+        min-height: 0;
+        height: auto !important;
+    }
+
+    .container {
+        padding: 0;
+        max-width: 100%;
+        height: auto !important;
+        min-height: 0;
+    }
+
+    .full-width-content {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        max-width: 100%;
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    /* Header adjustments */
+    .header {
+        page-break-after: avoid;
+        margin-bottom: 1rem;
+        display: block;
+    }
+
+    .header h1 {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .header .subtitle {
+        font-size: 0.9rem;
+        margin-bottom: 0;
+    }
+
+    .header label {
+        display: none;
+    }
+
+    /* Table styling for print */
+    .table-container {
+        box-shadow: none;
+        border-radius: 0;
+        overflow: visible !important;
+        height: auto !important;
+        max-height: none !important;
+        page-break-inside: auto;
+    }
+
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 9pt;
+        page-break-inside: auto;
+        height: auto !important;
+    }
+
+    thead {
+        display: table-header-group;
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        page-break-after: avoid;
+        page-break-inside: avoid;
+    }
+
+    tbody {
+        display: table-row-group;
+        page-break-inside: auto;
+    }
+
+    tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+    }
+
+    th, td {
+        padding: 6px 8px;
+        border: 1px solid #ddd !important;
+        text-align: left;
+        vertical-align: top;
+    }
+
+    th {
+        font-weight: 600;
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* Ensure hover effects don't affect print */
+    tr:hover {
+        background: transparent;
+    }
+
+    /* Notes column */
+    .notes-col {
+        min-width: 200px;
+        max-width: 400px;
+        word-wrap: break-word;
+        white-space: pre-wrap;
+    }
+
+    /* Software columns */
+    .software-col {
+        width: 80px;
+        min-width: 80px;
+        max-width: 100px;
+    }
+
+    /* Hide any stray text or elements that shouldn't print */
+    .header > *:not(h1):not(.subtitle) {
+        display: none !important;
+    }
+
+    /* Status badges */
+    .badge {
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 8pt;
+        font-weight: 500;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .status-prerelease {
+        background: #f39c12 !important;
+        color: white !important;
+    }
+
+    .status-released {
+        background: #27ae60 !important;
+        color: white !important;
+    }
+
+    .status-production {
+        background: #2980b9 !important;
+        color: white !important;
+    }
+
+    .status-custom {
+        background: #8e44ad !important;
+        color: white !important;
+    }
+
+    /* Page breaks */
+    h1, h2, h3 {
+        page-break-after: avoid;
+    }
+
+    /* Prevent widows and orphans */
+    p {
+        orphans: 3;
+        widows: 3;
+    }
+
+    /* Print page setup */
+    @page {
+        margin: 1cm;
+        size: landscape;
+    }
 }
