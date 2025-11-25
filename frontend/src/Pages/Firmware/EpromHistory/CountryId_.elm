@@ -270,13 +270,13 @@ viewContent shared model =
                                     , th [] [ text "Notes" ]
                                     ]
                                 ]
-                            , tbody [] (List.map (viewVersionRow model) relevantVersions)
+                            , tbody [] (List.map (viewVersionRow model countryCustomerIds) relevantVersions)
                             ]
                         ]
 
 
-viewVersionRow : Model -> Version -> Html Msg
-viewVersionRow model version =
+viewVersionRow : Model -> List Int -> Version -> Html Msg
+viewVersionRow model countryCustomerIds version =
     let
         maybeDetail =
             Dict.get version.id model.versionDetails
@@ -288,13 +288,13 @@ viewVersionRow model version =
 
         notesText =
             maybeDetail
-                |> Maybe.map (.notes >> List.map .note >> String.join "; ")
-                |> Maybe.withDefault "-"
+                |> Maybe.andThen (\detail -> notesForCountry detail countryCustomerIds)
+                |> Maybe.withDefault ""
     in
     tr []
         [ td [] [ text version.softwareName ]
         , td [] [ text version.version ]
-        , td [] [ text version.releaseDate ]
+        , td [] [ text (formatReleaseDate version.releaseDate) ]
         , td [] [ text releasedBy ]
         , td []
             [ span [ class ("badge " ++ statusClass version.releaseStatus) ]
@@ -324,3 +324,92 @@ hasCountryCustomers : VersionDetail -> List Int -> Bool
 hasCountryCustomers versionDetail countryCustomerIds =
     versionDetail.customers
         |> List.any (\customer -> List.member customer.id countryCustomerIds)
+
+
+notesForCountry : VersionDetail -> List Int -> Maybe String
+notesForCountry detail countryCustomerIds =
+    let
+        relevantNotes =
+            detail.notes
+                |> List.filter
+                    (\note ->
+                        note.customers
+                            |> List.any (\customer -> List.member customer.id countryCustomerIds)
+                    )
+                |> List.map .note
+    in
+    case relevantNotes of
+        [] ->
+            Nothing
+
+        _ ->
+            Just (String.join "\n" relevantNotes)
+
+
+formatReleaseDate : String -> String
+formatReleaseDate dateTimeString =
+    let
+        datePart =
+            dateTimeString
+                |> String.split "T"
+                |> List.head
+                |> Maybe.withDefault dateTimeString
+    in
+    case String.split "-" datePart of
+        [ year, month, day ] ->
+            let
+                dayFormatted =
+                    case String.toInt day of
+                        Just d ->
+                            String.fromInt d
+
+                        Nothing ->
+                            day
+            in
+            dayFormatted ++ " " ++ monthName month ++ " " ++ year
+
+        _ ->
+            datePart
+
+
+monthName : String -> String
+monthName month =
+    case month of
+        "01" ->
+            "Jan"
+
+        "02" ->
+            "Feb"
+
+        "03" ->
+            "Mar"
+
+        "04" ->
+            "Apr"
+
+        "05" ->
+            "May"
+
+        "06" ->
+            "Jun"
+
+        "07" ->
+            "Jul"
+
+        "08" ->
+            "Aug"
+
+        "09" ->
+            "Sep"
+
+        "10" ->
+            "Oct"
+
+        "11" ->
+            "Nov"
+
+        "12" ->
+            "Dec"
+
+        _ ->
+            month

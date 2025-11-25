@@ -1,7 +1,7 @@
 module Pages.Firmware exposing (Model, Msg, page)
 
 import Api.Auth
-import Api.Data exposing (Country, Software, SoftwareType(..), Version, VersionDetail, versionDecoder, versionDetailDecoder)
+import Api.Data exposing (Country, CustomerReleaseStage(..), Software, SoftwareType(..), Version, VersionDetail, versionDecoder, versionDetailDecoder)
 import Api.Endpoint as Endpoint
 import Dict exposing (Dict)
 import Effect exposing (Effect)
@@ -322,8 +322,8 @@ findLatestVersionForCountry software country countryCustomerIds model =
                 version :: rest ->
                     case Dict.get version.id model.versionDetails of
                         Just detail ->
-                            -- Check if this version has any customers from this country
-                            if hasCountryCustomers detail countryCustomerIds then
+                            -- Check if this version has any production-ready customers from this country
+                            if hasCountryProductionReadyCustomers detail countryCustomerIds then
                                 Just detail
 
                             else
@@ -336,8 +336,11 @@ findLatestVersionForCountry software country countryCustomerIds model =
     findLatestInVersions softwareVersions
 
 
-hasCountryCustomers : VersionDetail -> List Int -> Bool
-hasCountryCustomers versionDetail countryCustomerIds =
-    -- Check if any customer in the version detail matches the country's customer IDs
+hasCountryProductionReadyCustomers : VersionDetail -> List Int -> Bool
+hasCountryProductionReadyCustomers versionDetail countryCustomerIds =
     versionDetail.customers
-        |> List.any (\customer -> List.member customer.id countryCustomerIds)
+        |> List.any
+            (\customer ->
+                List.member customer.id countryCustomerIds
+                    && customer.releaseStage == CustomerProductionReady
+            )

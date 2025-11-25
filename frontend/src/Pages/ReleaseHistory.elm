@@ -406,10 +406,71 @@ formatNotesForCustomerWithSoftware softwareName customerId notes =
 
 formatDate : String -> String
 formatDate dateString =
-    dateString
-        |> String.split "T"
-        |> List.head
-        |> Maybe.withDefault dateString
+    let
+        datePart =
+            dateString
+                |> String.split "T"
+                |> List.head
+                |> Maybe.withDefault dateString
+    in
+    case String.split "-" datePart of
+        [ year, month, day ] ->
+            let
+                dayFormatted =
+                    case String.toInt day of
+                        Just d ->
+                            String.fromInt d
+
+                        Nothing ->
+                            day
+            in
+            dayFormatted ++ " " ++ monthName month ++ " " ++ year
+
+        _ ->
+            datePart
+
+
+monthName : String -> String
+monthName month =
+    case month of
+        "01" ->
+            "Jan"
+
+        "02" ->
+            "Feb"
+
+        "03" ->
+            "Mar"
+
+        "04" ->
+            "Apr"
+
+        "05" ->
+            "May"
+
+        "06" ->
+            "Jun"
+
+        "07" ->
+            "Jul"
+
+        "08" ->
+            "Aug"
+
+        "09" ->
+            "Sep"
+
+        "10" ->
+            "Oct"
+
+        "11" ->
+            "Nov"
+
+        "12" ->
+            "Dec"
+
+        _ ->
+            month
 
 
 compactRows : List ReleaseInsightRow -> List ReleaseInsightRow

@@ -220,7 +220,7 @@ viewVersionRow version =
                 [ text (releaseStatusLabel version.releaseStatus) ]
             ]
         , td [] [ text version.releasedBy ]
-        , td [] [ text version.releaseDate ]
+        , td [] [ text (formatDateTime version.releaseDate) ]
         , td [] [ text (String.fromInt version.customerCount) ]
         ]
 
@@ -239,3 +239,82 @@ statusClass status =
 
         CustomPerCustomer ->
             "status-custom"
+
+
+formatDateTime : String -> String
+formatDateTime dateTimeStr =
+    case String.split "T" dateTimeStr of
+        [ datePart, timePartWithSeconds ] ->
+            let
+                formattedDate =
+                    case String.split "-" datePart of
+                        [ year, month, day ] ->
+                            let
+                                dayFormatted =
+                                    case String.toInt day of
+                                        Just d ->
+                                            String.fromInt d
+
+                                        Nothing ->
+                                            day
+                            in
+                            dayFormatted ++ " " ++ monthName month ++ " " ++ year
+
+                        _ ->
+                            datePart
+
+                formattedTime =
+                    case String.split ":" timePartWithSeconds of
+                        hour :: minute :: _ ->
+                            hour ++ ":" ++ minute
+
+                        _ ->
+                            timePartWithSeconds
+            in
+            formattedDate ++ " " ++ formattedTime
+
+        _ ->
+            dateTimeStr
+
+
+monthName : String -> String
+monthName month =
+    case month of
+        "01" ->
+            "Jan"
+
+        "02" ->
+            "Feb"
+
+        "03" ->
+            "Mar"
+
+        "04" ->
+            "Apr"
+
+        "05" ->
+            "May"
+
+        "06" ->
+            "Jun"
+
+        "07" ->
+            "Jul"
+
+        "08" ->
+            "Aug"
+
+        "09" ->
+            "Sep"
+
+        "10" ->
+            "Oct"
+
+        "11" ->
+            "Nov"
+
+        "12" ->
+            "Dec"
+
+        _ ->
+            month
