@@ -222,3 +222,6 @@ statusClass status =
 
         Api.Data.CustomPerCustomer ->
             "status-custom"
+
+        Api.Data.Canceled ->
+            "status-canceled"

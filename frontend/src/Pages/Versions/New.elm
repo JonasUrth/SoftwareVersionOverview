@@ -637,6 +637,7 @@ viewVersionInfo shared form fieldsEnabled customEnabled =
                         , disabled (not customEnabled)
                         ]
                         [ text "Individual customer releases" ]
+                    , option [ value "Canceled", selected (form.releaseStatus == Canceled) ] [ text "Canceled" ]
                     ]
                 ]
             ]
@@ -941,7 +942,7 @@ viewCustomerCheckbox form enabled customer =
 
 customerStageOptions : List CustomerReleaseStage
 customerStageOptions =
-    [ CustomerPreRelease, CustomerReleased, CustomerProductionReady ]
+    [ CustomerPreRelease, CustomerReleased, CustomerProductionReady, CustomerCanceled ]
 
 
 customerStageLabel : CustomerReleaseStage -> String
@@ -955,6 +956,9 @@ customerStageLabel stage =
 
         CustomerProductionReady ->
             "Production Ready"
+
+        CustomerCanceled ->
+            "Canceled"
 
 
 viewNotes : Shared.Model -> Model -> Bool -> Html Msg
@@ -1276,6 +1280,9 @@ defaultStageForStatus status =
 
         CustomPerCustomer ->
             CustomerPreRelease
+
+        Canceled ->
+            CustomerCanceled
 
 
 viewReleaseValidationSection : Model -> Html Msg

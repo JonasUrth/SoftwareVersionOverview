@@ -448,6 +448,11 @@ tr.inactive td {
     color: white;
 }
 
+.status-canceled {
+    background: #e74c3c;
+    color: white;
+}
+
 /* Messages */
 .error {
     background: #e74c3c;
@@ -872,6 +877,11 @@ nav a:hover {
 
     .status-custom {
         background: #8e44ad !important;
+        color: white !important;
+    }
+
+    .status-canceled {
+        background: #e74c3c !important;
         color: white !important;
     }
 

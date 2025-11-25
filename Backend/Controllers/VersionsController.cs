@@ -525,6 +525,7 @@ public class VersionsController : BaseController
         {
             ReleaseStatus.Released => CustomerReleaseStage.Released,
             ReleaseStatus.ProductionReady => CustomerReleaseStage.ProductionReady,
+            ReleaseStatus.Canceled => CustomerReleaseStage.Canceled,
             _ => CustomerReleaseStage.PreRelease
         };
     }

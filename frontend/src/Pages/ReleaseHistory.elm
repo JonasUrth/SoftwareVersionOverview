@@ -599,6 +599,9 @@ customerStageToReleaseStatus stage =
         CustomerProductionReady ->
             ProductionReady
 
+        CustomerCanceled ->
+            Canceled
+
 
 fillMissingVersions : List Software -> List ReleaseInsightRow -> List ReleaseInsightRow
 fillMissingVersions softwareList rows =
@@ -995,3 +998,6 @@ statusClass status =
 
         CustomPerCustomer ->
             "status-custom"
+
+        Canceled ->
+            "status-canceled"

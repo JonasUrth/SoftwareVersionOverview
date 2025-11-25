@@ -6,7 +6,8 @@ public enum CustomerReleaseStage
 {
     PreRelease,
     Released,
-    ProductionReady
+    ProductionReady,
+    Canceled
 }
 
 public class VersionHistoryCustomer

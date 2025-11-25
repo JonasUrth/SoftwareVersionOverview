@@ -280,12 +280,14 @@ type ReleaseStatus
     | Released
     | ProductionReady
     | CustomPerCustomer
+    | Canceled
 
 
 type CustomerReleaseStage
     = CustomerPreRelease
     | CustomerReleased
     | CustomerProductionReady
+    | CustomerCanceled
 
 
 customerReleaseStageToString : CustomerReleaseStage -> String
@@ -300,6 +302,9 @@ customerReleaseStageToString stage =
         CustomerProductionReady ->
             "ProductionReady"
 
+        CustomerCanceled ->
+            "Canceled"
+
 
 customerReleaseStageFromString : String -> CustomerReleaseStage
 customerReleaseStageFromString str =
@@ -312,6 +317,9 @@ customerReleaseStageFromString str =
 
         "ProductionReady" ->
             CustomerProductionReady
+
+        "Canceled" ->
+            CustomerCanceled
 
         _ ->
             CustomerReleased
@@ -331,6 +339,9 @@ customerReleaseStageDecoder =
 
                     "ProductionReady" ->
                         Decode.succeed CustomerProductionReady
+
+                    "Canceled" ->
+                        Decode.succeed CustomerCanceled
 
                     _ ->
                         Decode.fail ("Unknown customer release stage: " ++ str)
@@ -352,6 +363,9 @@ releaseStatusToString status =
         CustomPerCustomer ->
             "CustomPerCustomer"
 
+        Canceled ->
+            "Canceled"
+
 
 releaseStatusLabel : ReleaseStatus -> String
 releaseStatusLabel status =
@@ -368,6 +382,9 @@ releaseStatusLabel status =
         CustomPerCustomer ->
             "Individual Customer Releases"
 
+        Canceled ->
+            "Canceled"
+
 
 releaseStatusFromString : String -> ReleaseStatus
 releaseStatusFromString str =
@@ -383,6 +400,9 @@ releaseStatusFromString str =
 
         "CustomPerCustomer" ->
             CustomPerCustomer
+
+        "Canceled" ->
+            Canceled
 
         _ ->
             Released
@@ -405,6 +425,9 @@ releaseStatusDecoder =
 
                     "CustomPerCustomer" ->
                         Decode.succeed CustomPerCustomer
+
+                    "Canceled" ->
+                        Decode.succeed Canceled
 
                     _ ->
                         Decode.fail ("Unknown release status: " ++ str)

@@ -711,6 +711,9 @@ releaseStatusFromStage stage =
         CustomerProductionReady ->
             ProductionReady
 
+        CustomerCanceled ->
+            Canceled
+
 
 httpErrorToString : Http.Error -> String
 httpErrorToString error =

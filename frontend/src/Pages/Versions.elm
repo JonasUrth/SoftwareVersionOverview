@@ -240,6 +240,9 @@ statusClass status =
         CustomPerCustomer ->
             "status-custom"
 
+        Canceled ->
+            "status-canceled"
+
 
 formatDateTime : String -> String
 formatDateTime dateTimeStr =

@@ -319,6 +319,9 @@ statusClass status =
         Api.Data.CustomPerCustomer ->
             "status-custom"
 
+        Api.Data.Canceled ->
+            "status-canceled"
+
 
 hasCountryCustomers : VersionDetail -> List Int -> Bool
 hasCountryCustomers versionDetail countryCustomerIds =
