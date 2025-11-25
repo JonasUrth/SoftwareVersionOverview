@@ -28,6 +28,16 @@ software paths =
     Url.Builder.crossOrigin baseUrl ("api" :: "software" :: paths) []
 
 
+softwareReleasePath : Int -> String -> List Int -> String
+softwareReleasePath softwareId version customerIds =
+    Url.Builder.crossOrigin
+        baseUrl
+        [ "api", "software", String.fromInt softwareId, "release-path" ]
+        (Url.Builder.string "version" version
+            :: List.map (Url.Builder.int "customerIds") customerIds
+        )
+
+
 users : List String -> String
 users paths =
     Url.Builder.crossOrigin baseUrl ("api" :: "users" :: paths) []

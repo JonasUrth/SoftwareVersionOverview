@@ -1,7 +1,7 @@
 module Pages.Software exposing (Model, Msg, page)
 
 import Api.Auth
-import Api.Data exposing (Software, SoftwareType(..), softwareDecoder, softwareEncoder, softwareTypeFromString, softwareTypeToString)
+import Api.Data exposing (ReleaseMethod(..), Software, SoftwareType(..), releaseMethodFromString, releaseMethodToString, softwareDecoder, softwareEncoder, softwareTypeFromString, softwareTypeToString)
 import Api.Endpoint as Endpoint
 import Effect exposing (Effect)
 import Gen.Params.Software exposing (Params)
@@ -12,6 +12,7 @@ import Html.Events exposing (onClick, onInput, onSubmit, preventDefaultOn)
 import Http
 import Json.Decode as Decode
 import Layouts.Default
+import Maybe
 import Page
 import Request
 import Shared
@@ -20,6 +21,10 @@ import View exposing (View)
 
 page : Shared.Model -> Request.With Params -> Page.With Model Msg
 page shared req =
+    let
+        _ =
+            req
+    in
     Page.advanced
         { init = init shared req
         , update = update req
@@ -33,18 +38,20 @@ type alias Model =
     , formName : String
     , formType : String
     , formFileLocation : String
-    , formReleaseMethod : String
+    , formReleaseMethod : Maybe ReleaseMethod
+    , editingId : Maybe Int
     , error : Maybe String
     }
 
 
 init : Shared.Model -> Request.With Params -> ( Model, Effect Msg )
-init shared req =
+init shared _ =
     ( { showForm = False
       , formName = ""
       , formType = ""
       , formFileLocation = ""
-      , formReleaseMethod = ""
+      , formReleaseMethod = Nothing
+      , editingId = Nothing
       , error = Nothing
       }
     , case shared.user of
@@ -69,6 +76,8 @@ type Msg
     | ReleaseMethodChanged String
     | FormSubmitted
     | SoftwareCreated (Result Http.Error Software)
+    | EditSoftware Software
+    | SoftwareUpdated Int (Result Http.Error ())
     | DeleteSoftware Int
     | SoftwareDeleted Int (Result Http.Error ())
     | NavigateToRoute Route.Route
@@ -80,10 +89,28 @@ update : Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
 update req msg model =
     case msg of
         ShowAddForm ->
-            ( { model | showForm = True }, Effect.none )
+            ( { model
+                | showForm = True
+                , formName = ""
+                , formType = ""
+                , formFileLocation = ""
+                , formReleaseMethod = Nothing
+                , editingId = Nothing
+              }
+            , Effect.none
+            )
 
         CancelForm ->
-            ( { model | showForm = False }, Effect.none )
+            ( { model
+                | showForm = False
+                , formName = ""
+                , formType = ""
+                , formFileLocation = ""
+                , formReleaseMethod = Nothing
+                , editingId = Nothing
+              }
+            , Effect.none
+            )
 
         NameChanged name ->
             ( { model | formName = name }, Effect.none )
@@ -95,40 +122,105 @@ update req msg model =
             ( { model | formFileLocation = loc }, Effect.none )
 
         ReleaseMethodChanged method ->
-            ( { model | formReleaseMethod = method }, Effect.none )
+            let
+                parsedMethod =
+                    if String.isEmpty method then
+                        Nothing
+
+                    else
+                        releaseMethodFromString method
+            in
+            ( { model | formReleaseMethod = parsedMethod }, Effect.none )
 
         FormSubmitted ->
-            ( model
-            , Effect.fromCmd <|
-                Http.post
-                    { url = Endpoint.software []
-                    , body =
-                        Http.jsonBody <|
-                            softwareEncoder
-                                { name = model.formName
-                                , type_ = softwareTypeFromString model.formType
-                                , fileLocation =
-                                    if String.isEmpty model.formFileLocation then
-                                        Nothing
+            let
+                requestBody =
+                    Http.jsonBody <|
+                        softwareEncoder
+                            { name = model.formName
+                            , type_ = softwareTypeFromString model.formType
+                            , fileLocation =
+                                if String.isEmpty model.formFileLocation then
+                                    Nothing
 
-                                    else
-                                        Just model.formFileLocation
-                                , releaseMethod =
-                                    if String.isEmpty model.formReleaseMethod then
-                                        Nothing
+                                else
+                                    Just model.formFileLocation
+                            , releaseMethod =
+                                model.formReleaseMethod
+                            }
+            in
+            case model.editingId of
+                Nothing ->
+                    ( model
+                    , Effect.fromCmd <|
+                        Http.request
+                            { method = "POST"
+                            , headers = []
+                            , url = Endpoint.software []
+                            , body = requestBody
+                            , expect = Http.expectStringResponse SoftwareCreated decodeSoftwareResponse
+                            , timeout = Nothing
+                            , tracker = Nothing
+                            }
+                    )
 
-                                    else
-                                        Just model.formReleaseMethod
-                                }
-                    , expect = Http.expectJson SoftwareCreated softwareDecoder
-                    }
-            )
+                Just id ->
+                    ( model
+                    , Effect.fromCmd <|
+                        Http.request
+                            { method = "PUT"
+                            , headers = []
+                            , url = Endpoint.software [ String.fromInt id ]
+                            , body = requestBody
+                            , expect = Http.expectWhatever (SoftwareUpdated id)
+                            , timeout = Nothing
+                            , tracker = Nothing
+                            }
+                    )
 
         SoftwareCreated (Ok _) ->
-            ( { model | showForm = False }, Effect.fromShared Shared.RefreshSoftware )
+            ( { model
+                | showForm = False
+                , formName = ""
+                , formType = ""
+                , formFileLocation = ""
+                , formReleaseMethod = Nothing
+                , editingId = Nothing
+                , error = Nothing
+              }
+            , Effect.fromShared Shared.RefreshSoftware
+            )
 
-        SoftwareCreated (Err _) ->
-            ( { model | error = Just "Failed to create software" }, Effect.none )
+        SoftwareCreated (Err err) ->
+            ( { model | error = Just ("Failed to create software: " ++ httpErrorToString err) }, Effect.none )
+
+        EditSoftware sw ->
+            ( { model
+                | showForm = True
+                , formName = sw.name
+                , formType = softwareTypeToString sw.type_
+                , formFileLocation = Maybe.withDefault "" sw.fileLocation
+                , formReleaseMethod = sw.releaseMethod
+                , editingId = Just sw.id
+              }
+            , Effect.none
+            )
+
+        SoftwareUpdated _ (Ok ()) ->
+            ( { model
+                | showForm = False
+                , formName = ""
+                , formType = ""
+                , formFileLocation = ""
+                , formReleaseMethod = Nothing
+                , editingId = Nothing
+                , error = Nothing
+              }
+            , Effect.fromShared Shared.RefreshSoftware
+            )
+
+        SoftwareUpdated _ (Err err) ->
+            ( { model | error = Just ("Failed to update software: " ++ httpErrorToString err) }, Effect.none )
 
         DeleteSoftware id ->
             ( model
@@ -209,6 +301,7 @@ view shared req model =
                         [ h1 [] [ text "Software" ]
                         , button [ class "btn-primary", onClick ShowAddForm ] [ text "+ Add Software" ]
                         ]
+                    , viewError model.error
                     , if model.showForm then
                         viewForm model
 
@@ -221,10 +314,29 @@ view shared req model =
         }
 
 
+viewError : Maybe String -> Html Msg
+viewError maybeError =
+    case maybeError of
+        Just errMsg ->
+            div [ class "alert alert-error" ]
+                [ text errMsg ]
+
+        Nothing ->
+            text ""
+
+
 viewForm : Model -> Html Msg
 viewForm model =
     div [ class "form-card" ]
-        [ h3 [] [ text "Add New Software" ]
+        [ h3 []
+            [ text
+                (if model.editingId == Nothing then
+                    "Add New Software"
+
+                 else
+                    "Edit Software"
+                )
+            ]
         , Html.form [ onSubmit FormSubmitted ]
             [ div [ class "form-group" ]
                 [ label [] [ text "Name" ]
@@ -247,14 +359,35 @@ viewForm model =
             , div [ class "form-group" ]
                 [ label [] [ text "Release Method" ]
                 , select [ onInput ReleaseMethodChanged ]
-                    [ option [ value "" ] [ text "-- Select Release Method --" ]
-                    , option [ value "FindFile", selected (model.formReleaseMethod == "FindFile") ] [ text "Find file" ]
-                    , option [ value "CreateCD", selected (model.formReleaseMethod == "CreateCD") ] [ text "Create CD" ]
+                    [ option [ value "", selected (model.formReleaseMethod == Nothing) ] [ text "-- Select Release Method --" ]
+                    , option
+                        [ value (releaseMethodToString FindFile)
+                        , selected (model.formReleaseMethod == Just FindFile)
+                        ]
+                        [ text "Find file" ]
+                    , option
+                        [ value (releaseMethodToString CreateCD)
+                        , selected (model.formReleaseMethod == Just CreateCD)
+                        ]
+                        [ text "Create CD" ]
+                    , option
+                        [ value (releaseMethodToString FindFolder)
+                        , selected (model.formReleaseMethod == Just FindFolder)
+                        ]
+                        [ text "Find folder" ]
                     ]
                 ]
             , div [ class "form-actions" ]
                 [ button [ type_ "button", class "btn-secondary", onClick CancelForm ] [ text "Cancel" ]
-                , button [ type_ "submit", class "btn-primary" ] [ text "Save" ]
+                , button [ type_ "submit", class "btn-primary" ]
+                    [ text
+                        (if model.editingId == Nothing then
+                            "Save"
+
+                         else
+                            "Update"
+                        )
+                    ]
                 ]
             ]
         ]
@@ -286,7 +419,8 @@ viewSoftwareRow sw =
         [ td [] [ text sw.name ]
         , td [] [ text (formatSoftwareType sw.type_) ]
         , td [ class "actions" ]
-            [ button [ class "btn-small btn-danger", onClick (DeleteSoftware sw.id) ] [ text "Delete" ]
+            [ button [ class "btn-small", onClick (EditSoftware sw) ] [ text "Edit" ]
+            , button [ class "btn-small btn-danger", onClick (DeleteSoftware sw.id) ] [ text "Delete" ]
             ]
         ]
 
@@ -294,3 +428,46 @@ viewSoftwareRow sw =
 formatSoftwareType : SoftwareType -> String
 formatSoftwareType type_ =
     softwareTypeToString type_
+
+
+decodeSoftwareResponse : Http.Response String -> Result Http.Error Software
+decodeSoftwareResponse response =
+    case response of
+        Http.BadUrl_ badUrl ->
+            Err (Http.BadUrl badUrl)
+
+        Http.Timeout_ ->
+            Err Http.Timeout
+
+        Http.NetworkError_ ->
+            Err Http.NetworkError
+
+        Http.BadStatus_ _ body ->
+            Err (Http.BadBody body)
+
+        Http.GoodStatus_ _ body ->
+            case Decode.decodeString softwareDecoder body of
+                Ok value ->
+                    Ok value
+
+                Err err ->
+                    Err (Http.BadBody (Decode.errorToString err))
+
+
+httpErrorToString : Http.Error -> String
+httpErrorToString error =
+    case error of
+        Http.BadUrl badUrl ->
+            "Bad URL: " ++ badUrl
+
+        Http.Timeout ->
+            "Request timed out."
+
+        Http.NetworkError ->
+            "Network error."
+
+        Http.BadStatus statusCode ->
+            "Server returned status " ++ String.fromInt statusCode ++ "."
+
+        Http.BadBody details ->
+            details

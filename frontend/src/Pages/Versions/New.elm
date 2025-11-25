@@ -1,6 +1,6 @@
 module Pages.Versions.New exposing (Model, Msg, page)
 
-import Api.Data exposing (Customer, CustomerReleaseStage(..), ReleaseStatus(..), Software, SoftwareType(..), Version, VersionDetail, createVersionEncoder, customerReleaseStageFromString, customerReleaseStageToString, releaseStatusFromString, versionDecoder, versionDetailDecoder)
+import Api.Data exposing (Customer, CustomerReleaseStage(..), ReleasePathCheckResponse, ReleaseStatus(..), Software, SoftwareType(..), Version, VersionDetail, createVersionEncoder, customerReleaseStageFromString, customerReleaseStageToString, releasePathCheckDecoder, releaseStatusFromString, versionDecoder, versionDetailDecoder)
 import Api.Endpoint as Endpoint
 import Dict
 import Effect exposing (Effect)
@@ -15,6 +15,7 @@ import Page
 import Api.VersionsForm as Form
 import Request
 import Shared
+import Versions.ReleasePath as ReleasePath
 import Task
 import Time exposing (Posix)
 import View exposing (View)
@@ -40,6 +41,8 @@ type alias Model =
     , historyError : Maybe String
     , loading : Bool
     , token : Maybe String
+    , releasePathStatus : ReleasePath.Status
+    , releasePathRequest : Maybe ReleasePath.Request
     }
 
 
@@ -48,7 +51,7 @@ init shared _ =
     ( { form =
             { version = ""
             , softwareId = 0
-            , releaseDate = "2025-11-20"
+            , releaseDate = ""
             , releaseTime = ""
             , releaseStatus = PreRelease
             , selectedCustomers = []
@@ -65,6 +68,8 @@ init shared _ =
       , historyError = Nothing
       , loading = False
       , token = shared.token
+      , releasePathStatus = ReleasePath.initialStatus
+      , releasePathRequest = Nothing
       }
     , case shared.user of
         Just _ ->
@@ -113,6 +118,8 @@ type Msg
     | VersionDetailFetched Int (Result Http.Error VersionDetail)
     | GotCurrentTime Posix
     | GoBack
+    | RefreshReleasePath
+    | ReleasePathChecked ReleasePath.Request (Result Http.Error ReleasePathCheckResponse)
 
 
 update : Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -122,7 +129,10 @@ update req msg model =
             let
                 form = model.form
             in
-            ( { model | form = { form | version = version } }, Effect.none )
+            withReleasePathCheck
+                ( { model | form = { form | version = version } }
+                , Effect.none
+                )
 
         SoftwareChanged softwareIdStr ->
             let
@@ -133,7 +143,7 @@ update req msg model =
                 ( finalForm, ensureEffect ) =
                     Form.ensureVersionDetails updatedForm (\vid -> Effect.fromCmd (fetchVersionDetail model.token vid))
             in
-            ( { model | form = finalForm }, ensureEffect )
+            withReleasePathCheck ( { model | form = finalForm }, ensureEffect )
 
         ReleaseDateChanged date ->
             let
@@ -156,7 +166,10 @@ update req msg model =
                 syncedStages =
                     syncCustomerStages newStatus form.selectedCustomers form.customerStages
             in
-            ( { model | form = { form | releaseStatus = newStatus, customerStages = syncedStages } }, Effect.none )
+            withReleasePathCheck
+                ( { model | form = { form | releaseStatus = newStatus, customerStages = syncedStages } }
+                , Effect.none
+                )
 
         ToggleCustomer customerId ->
             let
@@ -171,7 +184,10 @@ update req msg model =
                 syncedStages =
                     syncCustomerStages form.releaseStatus newSelected form.customerStages
             in
-            ( { model | form = { form | selectedCustomers = newSelected, customerStages = syncedStages } }, Effect.none )
+            withReleasePathCheck
+                ( { model | form = { form | selectedCustomers = newSelected, customerStages = syncedStages } }
+                , Effect.none
+                )
 
         ToggleCountry checked customerIds ->
             let
@@ -195,7 +211,10 @@ update req msg model =
                 syncedStages =
                     syncCustomerStages form.releaseStatus newSelected form.customerStages
             in
-            ( { model | form = { form | selectedCustomers = newSelected, customerStages = syncedStages } }, Effect.none )
+            withReleasePathCheck
+                ( { model | form = { form | selectedCustomers = newSelected, customerStages = syncedStages } }
+                , Effect.none
+                )
 
         CountryFilterChanged query ->
             let
@@ -262,9 +281,31 @@ update req msg model =
         GotCurrentTime posix ->
             let
                 form = model.form
+                needsDate =
+                    String.isEmpty form.releaseDate
+
+                needsTime =
+                    String.isEmpty form.releaseTime
+
+                updatedForm =
+                    form
+                        |> (\f ->
+                                if needsDate then
+                                    { f | releaseDate = posixToDateString posix }
+
+                                else
+                                    f
+                           )
+                        |> (\f ->
+                                if needsTime then
+                                    { f | releaseTime = posixToTimeString posix }
+
+                                else
+                                    f
+                           )
             in
-            if String.isEmpty form.releaseTime then
-                ( { model | form = { form | releaseTime = posixToTimeString posix } }, Effect.none )
+            if needsDate || needsTime then
+                ( { model | form = updatedForm }, Effect.none )
 
             else
                 ( model, Effect.none )
@@ -344,7 +385,7 @@ update req msg model =
                     , headers = authHeaders model.token
                     , url = Endpoint.versions []
                     , body = Http.jsonBody (createVersionEncoder request)
-                    , expect = Http.expectString VersionCreated
+                    , expect = Http.expectStringResponse VersionCreated parseVersionResponse
                     , timeout = Nothing
                     , tracker = Nothing
                     }
@@ -355,8 +396,23 @@ update req msg model =
             , Effect.fromCmd (Request.pushRoute Route.Versions req)
             )
 
-        VersionCreated (Err _) ->
-            ( { model | error = Just "Failed to create release", loading = False }, Effect.none )
+        VersionCreated (Err error) ->
+            ( { model | error = Just (extractErrorMessage error), loading = False }, Effect.none )
+
+        RefreshReleasePath ->
+            withReleasePathCheck ( model, Effect.none )
+
+        ReleasePathChecked request result ->
+            if model.releasePathRequest /= Just request then
+                ( model, Effect.none )
+
+            else
+                case result of
+                    Ok response ->
+                        ( { model | releasePathStatus = ReleasePath.Result response, releasePathRequest = Nothing }, Effect.none )
+
+                    Err _ ->
+                        ( { model | releasePathStatus = ReleasePath.Error "Failed to validate release file location.", releasePathRequest = Nothing }, Effect.none )
 
         GoBack ->
             ( model, Effect.fromCmd (Request.pushRoute Route.Versions req) )
@@ -404,6 +460,7 @@ view shared model =
                 , viewCustomerSelection shared model hasSoftware individualEnabled
                 , viewCustomerStages shared model hasSoftware individualEnabled
                 , viewNotes shared model hasSoftware
+                , viewReleaseValidationSection model
                 , div [ class "form-actions" ]
                     [ button [ type_ "button", class "btn-secondary", onClick GoBack ] [ text "Cancel" ]
                     , button [ type_ "submit", class "btn-primary", disabled (model.loading || not hasSoftware) ]
@@ -746,6 +803,54 @@ authHeaders token =
             []
 
 
+withReleasePathCheck : ( Model, Effect Msg ) -> ( Model, Effect Msg )
+withReleasePathCheck ( model, existingEffect ) =
+    let
+        ( updatedModel, releaseEffect ) =
+            scheduleReleasePathCheck model
+    in
+    ( updatedModel, Effect.batch [ existingEffect, releaseEffect ] )
+
+
+scheduleReleasePathCheck : Model -> ( Model, Effect Msg )
+scheduleReleasePathCheck model =
+    let
+        ( status, maybeRequest ) =
+            ReleasePath.evaluate
+                model.form.releaseStatus
+                model.form.softwareId
+                model.form.version
+                model.form.selectedCustomers
+
+        nextModel =
+            { model
+                | releasePathStatus = status
+                , releasePathRequest = maybeRequest
+            }
+    in
+    case maybeRequest of
+        Just request ->
+            ( nextModel
+            , Effect.fromCmd (fetchReleasePath model.token request)
+            )
+
+        Nothing ->
+            ( { nextModel | releasePathRequest = Nothing }, Effect.none )
+
+
+fetchReleasePath : Maybe String -> ReleasePath.Request -> Cmd Msg
+fetchReleasePath token request =
+    Http.request
+        { method = "GET"
+        , headers = authHeaders token
+        , url = Endpoint.softwareReleasePath request.softwareId request.version request.customerIds
+        , body = Http.emptyBody
+        , expect = Http.expectJson (ReleasePathChecked request) releasePathCheckDecoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
 viewHistoryError : Maybe String -> Html Msg
 viewHistoryError historyError =
     case historyError of
@@ -810,6 +915,61 @@ padTimePart value =
 
     else
         String.fromInt value
+
+
+posixToDateString : Posix -> String
+posixToDateString posix =
+    let
+        year =
+            Time.toYear Time.utc posix
+
+        month =
+            monthToInt (Time.toMonth Time.utc posix)
+
+        day =
+            Time.toDay Time.utc posix
+    in
+    String.fromInt year ++ "-" ++ padTimePart month ++ "-" ++ padTimePart day
+
+
+monthToInt : Time.Month -> Int
+monthToInt month =
+    case month of
+        Time.Jan ->
+            1
+
+        Time.Feb ->
+            2
+
+        Time.Mar ->
+            3
+
+        Time.Apr ->
+            4
+
+        Time.May ->
+            5
+
+        Time.Jun ->
+            6
+
+        Time.Jul ->
+            7
+
+        Time.Aug ->
+            8
+
+        Time.Sep ->
+            9
+
+        Time.Oct ->
+            10
+
+        Time.Nov ->
+            11
+
+        Time.Dec ->
+            12
 
 
 releaseDateTimeString : Form.Model -> String
@@ -894,3 +1054,67 @@ defaultStageForStatus status =
 
         CustomPerCustomer ->
             CustomerPreRelease
+
+
+viewReleaseValidationSection : Model -> Html Msg
+viewReleaseValidationSection model =
+    let
+        canRefresh =
+            model.form.softwareId > 0
+                && (not (String.isEmpty (String.trim model.form.version)))
+                && model.form.releaseStatus == ProductionReady
+    in
+    div [ class "release-validation" ]
+        [ ReleasePath.view model.releasePathStatus
+        , button
+            [ type_ "button"
+            , class "btn-secondary btn-small"
+            , onClick RefreshReleasePath
+            , disabled (not canRefresh)
+            ]
+            [ text "Refresh validation" ]
+        ]
+
+
+parseVersionResponse : Http.Response String -> Result Http.Error String
+parseVersionResponse response =
+    case response of
+        Http.BadUrl_ url ->
+            Err (Http.BadUrl url)
+
+        Http.Timeout_ ->
+            Err Http.Timeout
+
+        Http.NetworkError_ ->
+            Err Http.NetworkError
+
+        Http.BadStatus_ metadata body ->
+            -- Try to decode the error message from JSON response
+            case Decode.decodeString (Decode.field "message" Decode.string) body of
+                Ok message ->
+                    Err (Http.BadBody message)
+
+                Err _ ->
+                    Err (Http.BadStatus metadata.statusCode)
+
+        Http.GoodStatus_ _ _ ->
+            Ok "Success"
+
+
+extractErrorMessage : Http.Error -> String
+extractErrorMessage error =
+    case error of
+        Http.BadUrl url ->
+            "Invalid URL: " ++ url
+
+        Http.Timeout ->
+            "Request timed out. Please try again."
+
+        Http.NetworkError ->
+            "Network error. Please check your connection."
+
+        Http.BadStatus statusCode ->
+            "Failed to create release (Status: " ++ String.fromInt statusCode ++ ")"
+
+        Http.BadBody details ->
+            details

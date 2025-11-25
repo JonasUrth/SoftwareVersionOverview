@@ -1,6 +1,6 @@
 module Pages.Versions.Id_ exposing (Model, Msg, page)
 
-import Api.Data exposing (Customer, CustomerReleaseStage(..), ReleaseStatus(..), Software, SoftwareType(..), Version, VersionDetail, customerReleaseStageFromString, customerReleaseStageToString, releaseStatusFromString, updateVersionEncoder, versionDetailDecoder, versionDecoder)
+import Api.Data exposing (Customer, CustomerReleaseStage(..), ReleasePathCheckResponse, ReleaseStatus(..), Software, SoftwareType(..), Version, VersionDetail, customerReleaseStageFromString, customerReleaseStageToString, releasePathCheckDecoder, releaseStatusFromString, updateVersionEncoder, versionDetailDecoder, versionDecoder)
 import Api.Endpoint as Endpoint
 import Dict
 import Effect exposing (Effect)
@@ -15,6 +15,7 @@ import Page
 import Api.VersionsForm as Form
 import Request
 import Shared
+import Versions.ReleasePath as ReleasePath
 import Task
 import Time exposing (Posix)
 import View exposing (View)
@@ -42,6 +43,8 @@ type alias Model =
     , loading : Bool
     , token : Maybe String
     , loadingVersion : Bool
+    , releasePathStatus : ReleasePath.Status
+    , releasePathRequest : Maybe ReleasePath.Request
     }
 
 
@@ -73,6 +76,8 @@ init shared req =
       , loading = False
       , token = shared.token
       , loadingVersion = False
+      , releasePathStatus = ReleasePath.initialStatus
+      , releasePathRequest = Nothing
       }
     , case shared.user of
         Just _ ->
@@ -121,6 +126,8 @@ type Msg
     | VersionsFetched (Result Http.Error (List Version))
     | VersionDetailForHistoryFetched Int (Result Http.Error VersionDetail)
     | GoBack
+    | RefreshReleasePath
+    | ReleasePathChecked ReleasePath.Request (Result Http.Error ReleasePathCheckResponse)
 
 
 update : Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -130,7 +137,10 @@ update req msg model =
             let
                 form = model.form
             in
-            ( { model | form = { form | version = version } }, Effect.none )
+            withReleasePathCheck
+                ( { model | form = { form | version = version } }
+                , Effect.none
+                )
 
         SoftwareChanged softwareIdStr ->
             let
@@ -141,7 +151,7 @@ update req msg model =
                 ( finalForm, ensureEffect ) =
                     Form.ensureVersionDetails updatedForm (\vid -> Effect.fromCmd (fetchVersionDetailForHistory model.token vid))
             in
-            ( { model | form = finalForm }, ensureEffect )
+            withReleasePathCheck ( { model | form = finalForm }, ensureEffect )
 
         ReleaseDateChanged date ->
             let
@@ -164,7 +174,10 @@ update req msg model =
                 syncedStages =
                     syncCustomerStages newStatus form.selectedCustomers form.customerStages
             in
-            ( { model | form = { form | releaseStatus = newStatus, customerStages = syncedStages } }, Effect.none )
+            withReleasePathCheck
+                ( { model | form = { form | releaseStatus = newStatus, customerStages = syncedStages } }
+                , Effect.none
+                )
 
         ToggleCustomer customerId ->
             let
@@ -179,7 +192,10 @@ update req msg model =
                 syncedStages =
                     syncCustomerStages form.releaseStatus newSelected form.customerStages
             in
-            ( { model | form = { form | selectedCustomers = newSelected, customerStages = syncedStages } }, Effect.none )
+            withReleasePathCheck
+                ( { model | form = { form | selectedCustomers = newSelected, customerStages = syncedStages } }
+                , Effect.none
+                )
 
         ToggleCountry checked customerIds ->
             let
@@ -203,7 +219,10 @@ update req msg model =
                 syncedStages =
                     syncCustomerStages form.releaseStatus newSelected form.customerStages
             in
-            ( { model | form = { form | selectedCustomers = newSelected, customerStages = syncedStages } }, Effect.none )
+            withReleasePathCheck
+                ( { model | form = { form | selectedCustomers = newSelected, customerStages = syncedStages } }
+                , Effect.none
+                )
 
 
         CountryFilterChanged query ->
@@ -257,33 +276,33 @@ update req msg model =
                             }
                         )
                         detail.notes
-            in
-            ( { model
-                | form =
-                    { version = detail.version
-                    , softwareId = detail.softwareId
-                    , releaseDate = dateStr
-                    , releaseTime = timeStr
-                    , releaseStatus = detail.releaseStatus
-                    , selectedCustomers = List.map .id detail.customers
-                    , customerStages =
-                        Dict.fromList
-                            (List.map
-                                (\customerDetail -> ( customerDetail.id, customerDetail.releaseStage ))
-                                detail.customers
-                            )
-                    , notes = notes
-                    , countryFilter = model.form.countryFilter
-                    , customerFilter = model.form.customerFilter
-                    , versions = model.form.versions
-                    , versionsLoading = model.form.versionsLoading
-                    , versionDetails = model.form.versionDetails
-                    , loadingVersionDetailIds = model.form.loadingVersionDetailIds
+                updatedModel =
+                    { model
+                        | form =
+                            { version = detail.version
+                            , softwareId = detail.softwareId
+                            , releaseDate = dateStr
+                            , releaseTime = timeStr
+                            , releaseStatus = detail.releaseStatus
+                            , selectedCustomers = List.map .id detail.customers
+                            , customerStages =
+                                Dict.fromList
+                                    (List.map
+                                        (\customerDetail -> ( customerDetail.id, customerDetail.releaseStage ))
+                                        detail.customers
+                                    )
+                            , notes = notes
+                            , countryFilter = model.form.countryFilter
+                            , customerFilter = model.form.customerFilter
+                            , versions = model.form.versions
+                            , versionsLoading = model.form.versionsLoading
+                            , versionDetails = model.form.versionDetails
+                            , loadingVersionDetailIds = model.form.loadingVersionDetailIds
+                            }
+                        , loadingVersion = False
                     }
-                , loadingVersion = False
-              }
-            , Effect.none
-            )
+            in
+            withReleasePathCheck ( updatedModel, Effect.none )
 
         VersionDetailFetched (Err _) ->
             ( { model | error = Just "Failed to load version", loadingVersion = False }, Effect.none )
@@ -399,6 +418,21 @@ update req msg model =
         VersionUpdated (Err _) ->
             ( { model | error = Just "Failed to update release", loading = False }, Effect.none )
 
+        RefreshReleasePath ->
+            withReleasePathCheck ( model, Effect.none )
+
+        ReleasePathChecked request result ->
+            if model.releasePathRequest /= Just request then
+                ( model, Effect.none )
+
+            else
+                case result of
+                    Ok response ->
+                        ( { model | releasePathStatus = ReleasePath.Result response, releasePathRequest = Nothing }, Effect.none )
+
+                    Err _ ->
+                        ( { model | releasePathStatus = ReleasePath.Error "Failed to validate release file location.", releasePathRequest = Nothing }, Effect.none )
+
         GoBack ->
             ( model, Effect.fromCmd (Request.pushRoute Route.Versions req) )
 
@@ -449,6 +483,7 @@ view shared model =
                     , viewCustomerSelection shared model hasSoftware individualEnabled
                     , viewCustomerStages shared model hasSoftware individualEnabled
                     , viewNotes shared model hasSoftware
+                    , viewReleaseValidationSection model
                     , div [ class "form-actions" ]
                         [ button [ type_ "button", class "btn-secondary", onClick GoBack ] [ text "Cancel" ]
                         , button [ type_ "submit", class "btn-primary", disabled (model.loading || not hasSoftware) ]
@@ -807,6 +842,54 @@ authHeaders token =
             []
 
 
+withReleasePathCheck : ( Model, Effect Msg ) -> ( Model, Effect Msg )
+withReleasePathCheck ( model, existingEffect ) =
+    let
+        ( updatedModel, releaseEffect ) =
+            scheduleReleasePathCheck model
+    in
+    ( updatedModel, Effect.batch [ existingEffect, releaseEffect ] )
+
+
+scheduleReleasePathCheck : Model -> ( Model, Effect Msg )
+scheduleReleasePathCheck model =
+    let
+        ( status, maybeRequest ) =
+            ReleasePath.evaluate
+                model.form.releaseStatus
+                model.form.softwareId
+                model.form.version
+                model.form.selectedCustomers
+
+        nextModel =
+            { model
+                | releasePathStatus = status
+                , releasePathRequest = maybeRequest
+            }
+    in
+    case maybeRequest of
+        Just request ->
+            ( nextModel
+            , Effect.fromCmd (fetchReleasePath model.token request)
+            )
+
+        Nothing ->
+            ( { nextModel | releasePathRequest = Nothing }, Effect.none )
+
+
+fetchReleasePath : Maybe String -> ReleasePath.Request -> Cmd Msg
+fetchReleasePath token request =
+    Http.request
+        { method = "GET"
+        , headers = authHeaders token
+        , url = Endpoint.softwareReleasePath request.softwareId request.version request.customerIds
+        , body = Http.emptyBody
+        , expect = Http.expectJson (ReleasePathChecked request) releasePathCheckDecoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
 selectedSoftware : Shared.Model -> Form.Model -> Maybe Software
 selectedSoftware shared form =
     shared.software
@@ -937,3 +1020,23 @@ defaultStageForStatus status =
 
         CustomPerCustomer ->
             CustomerPreRelease
+
+
+viewReleaseValidationSection : Model -> Html Msg
+viewReleaseValidationSection model =
+    let
+        canRefresh =
+            model.form.softwareId > 0
+                && (not (String.isEmpty (String.trim model.form.version)))
+                && model.form.releaseStatus == ProductionReady
+    in
+    div [ class "release-validation" ]
+        [ ReleasePath.view model.releasePathStatus
+        , button
+            [ type_ "button"
+            , class "btn-secondary btn-small"
+            , onClick RefreshReleasePath
+            , disabled (not canRefresh)
+            ]
+            [ text "Refresh validation" ]
+        ]

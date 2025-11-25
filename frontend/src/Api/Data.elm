@@ -152,6 +152,76 @@ softwareTypeDecoder =
             )
 
 
+-- RELEASE METHOD
+
+
+type ReleaseMethod
+    = FindFile
+    | CreateCD
+    | FindFolder
+
+
+releaseMethodToString : ReleaseMethod -> String
+releaseMethodToString method =
+    case method of
+        FindFile ->
+            "FindFile"
+
+        CreateCD ->
+            "CreateCD"
+
+        FindFolder ->
+            "FindFolder"
+
+
+releaseMethodFromString : String -> Maybe ReleaseMethod
+releaseMethodFromString str =
+    case str of
+        "FindFile" ->
+            Just FindFile
+
+        "CreateCD" ->
+            Just CreateCD
+
+        "FindFolder" ->
+            Just FindFolder
+
+        _ ->
+            Nothing
+
+
+releaseMethodDecoder : Decoder ReleaseMethod
+releaseMethodDecoder =
+    Decode.string
+        |> Decode.andThen
+            (\str ->
+                case releaseMethodFromString str of
+                    Just method ->
+                        Decode.succeed method
+
+                    Nothing ->
+                        Decode.fail ("Unknown release method: " ++ str)
+            )
+
+
+-- RELEASE PATH CHECK
+
+
+type alias ReleasePathCheckResponse =
+    { isValid : Bool
+    , errors : List String
+    , warnings : List String
+    }
+
+
+releasePathCheckDecoder : Decoder ReleasePathCheckResponse
+releasePathCheckDecoder =
+    Decode.map3 ReleasePathCheckResponse
+        (Decode.field "isValid" Decode.bool)
+        (Decode.field "errors" (Decode.list Decode.string))
+        (Decode.field "warnings" (Decode.list Decode.string))
+
+
 -- SOFTWARE
 
 
@@ -160,7 +230,7 @@ type alias Software =
     , name : String
     , type_ : SoftwareType
     , fileLocation : Maybe String
-    , releaseMethod : Maybe String
+    , releaseMethod : Maybe ReleaseMethod
     }
 
 
@@ -171,10 +241,10 @@ softwareDecoder =
         (Decode.field "name" Decode.string)
         (Decode.field "type" softwareTypeDecoder)
         (Decode.maybe (Decode.field "fileLocation" Decode.string))
-        (Decode.maybe (Decode.field "releaseMethod" Decode.string))
+        (Decode.maybe (Decode.field "releaseMethod" releaseMethodDecoder))
 
 
-softwareEncoder : { name : String, type_ : SoftwareType, fileLocation : Maybe String, releaseMethod : Maybe String } -> Encode.Value
+softwareEncoder : { name : String, type_ : SoftwareType, fileLocation : Maybe String, releaseMethod : Maybe ReleaseMethod } -> Encode.Value
 softwareEncoder data =
     Encode.object
         [ ( "name", Encode.string data.name )
@@ -190,7 +260,7 @@ softwareEncoder data =
         , ( "releaseMethod"
           , case data.releaseMethod of
                 Just method ->
-                    Encode.string method
+                    Encode.string (releaseMethodToString method)
 
                 Nothing ->
                     Encode.null

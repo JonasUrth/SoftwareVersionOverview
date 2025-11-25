@@ -3,6 +3,7 @@ namespace BMReleaseManager.Models;
 public enum ReleaseMethod
 {
     FindFile,
-    CreateCD
+    CreateCD,
+    FindFolder
 }
 
