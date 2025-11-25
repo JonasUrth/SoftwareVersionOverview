@@ -326,13 +326,15 @@ ToDos
    AND software.ReleaseMethod = FindFile or CreateCD or FindFolder
    2. We need to get a warning form the server if it cannot find the file / folder (new endpoint to check if file exsist for software with release)
    3. File software.FileLocation is saved like this Eks.: "L:\_Software\Releases\Firmware - Eprom\x200F\{{VERSION}}.bin" where the server needs to replase the {{VERSION}} with the version we want to check. I think we need to give a clear description from the new endpoint (Drive "L:/" not found, Folder not found "Folder path", File not found "File path") 
-- ✅ Add Requervalidation validation befor save new Versions release (warning above save button).
+ - ✅ Add Requervalidation validation befor save new Versions release (warning above save button).
    1. If fields changes (selected customers, and on edit page load)
    2. if Customer.RequiresCustomerValidation AND Release Status = ProductionReady then add a warning asking if the user is sure this release is validated by customer "customer name"
-- The add new version release form is too heigh you can not see all of it without scrolling
-- Importing old software version logs
-- Should it be possible to delete Countries, Customers, Software, Users, and Versions? How will it effect the version lists if you delete something? Customers have IsActive should we use that for all? Right now there are delete buttons without warnings on the pages!!
-- Add update field validation warning on save (version exsist, returned errs from server...)
-- Printing Version Historey view
-- Select all filter contrys/customers
+ - ✅ The add new version release form is too heigh you can not see all of it without scrolling
+ - Importing old software version logs
+ - Should it be possible to delete Countries, Customers, Software, Users, and Versions? How will it effect the version lists if you delete something? Customers have IsActive should we use that for all instead? Right now there are delete buttons without warnings on the pages!!
+ - ✅ Add update field validation warning on save (version exsist, returned errs from server...)
+ - Printing Version Historey view
+ - Select all filter contrys/customers option
+
+  
  

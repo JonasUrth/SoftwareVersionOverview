@@ -1,5 +1,6 @@
 module Pages.Versions.Id_ exposing (Model, Msg, page)
 
+import Api.Auth
 import Api.Data exposing (Customer, CustomerReleaseStage(..), ReleasePathCheckResponse, ReleaseStatus(..), Software, SoftwareType(..), Version, VersionDetail, customerReleaseStageFromString, customerReleaseStageToString, releasePathCheckDecoder, releaseStatusFromString, updateVersionEncoder, versionDetailDecoder, versionDecoder)
 import Api.Endpoint as Endpoint
 import Dict
@@ -11,6 +12,7 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (onCheck, onClick, onInput, onSubmit)
 import Http
 import Json.Decode as Decode
+import Layouts.Default
 import Page
 import Api.VersionsForm as Form
 import Request
@@ -26,7 +28,7 @@ page shared req =
     Page.advanced
         { init = init shared req
         , update = update req
-        , view = view shared
+        , view = view shared req
         , subscriptions = subscriptions
         }
 
@@ -128,6 +130,9 @@ type Msg
     | GoBack
     | RefreshReleasePath
     | ReleasePathChecked ReleasePath.Request (Result Http.Error ReleasePathCheckResponse)
+    | NavigateToRoute Route.Route
+    | LogoutRequested
+    | LogoutResponse (Result Http.Error ())
 
 
 update : Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -436,6 +441,31 @@ update req msg model =
         GoBack ->
             ( model, Effect.fromCmd (Request.pushRoute Route.Versions req) )
 
+        NavigateToRoute route ->
+            ( model, Effect.fromCmd (Request.pushRoute route req) )
+
+        LogoutRequested ->
+            ( model
+            , Effect.fromCmd (Api.Auth.logout LogoutResponse)
+            )
+
+        LogoutResponse (Ok _) ->
+            ( model
+            , Effect.batch
+                [ Effect.fromShared Shared.UserLoggedOut
+                , Effect.fromCmd (Request.pushRoute Route.Login req)
+                ]
+            )
+
+        LogoutResponse (Err _) ->
+            -- Even if logout API fails, clear local state and navigate to login
+            ( model
+            , Effect.batch
+                [ Effect.fromShared Shared.UserLoggedOut
+                , Effect.fromCmd (Request.pushRoute Route.Login req)
+                ]
+            )
+
 
 
 -- SUBSCRIPTIONS
@@ -450,8 +480,20 @@ subscriptions _ =
 -- VIEW
 
 
-view : Shared.Model -> Model -> View Msg
-view shared model =
+view : Shared.Model -> Request.With Params -> Model -> View Msg
+view shared req model =
+    Layouts.Default.view
+        { shared = shared
+        , req = req
+        , pageTitle = "Edit Release - BM Release Manager"
+        , pageBody = viewBody shared model
+        , onNavigate = NavigateToRoute
+        , onLogout = LogoutRequested
+        }
+
+
+viewBody : Shared.Model -> Model -> List (Html Msg)
+viewBody shared model =
     let
         maybeSoftware =
             selectedSoftware shared model.form
@@ -466,43 +508,37 @@ view shared model =
         individualEnabled =
             hasSoftware && isWindows
     in
-    { title = "Edit Release - BM Release Manager"
-    , body =
-        [ div [ class "container" ]
-            [ div [ class "header" ]
-                [ h1 [] [ text "Edit Release" ]
-                , button [ class "btn-secondary", onClick GoBack, type_ "button" ] [ text "← Back" ]
-                ]
-            , viewError model.error
-            , if model.loadingVersion then
-                div [ class "loading" ] [ text "Loading version..." ]
-
-              else
-                Html.form [ onSubmit FormSubmitted, class "form-card" ]
-                    [ viewVersionInfo shared model.form hasSoftware individualEnabled
-                    , viewCustomerSelection shared model hasSoftware individualEnabled
-                    , viewCustomerStages shared model hasSoftware individualEnabled
-                    , viewNotes shared model hasSoftware
-                    , viewReleaseValidationSection model
-                    , div [ class "form-actions" ]
-                        [ button [ type_ "button", class "btn-secondary", onClick GoBack ] [ text "Cancel" ]
-                        , button [ type_ "submit", class "btn-primary", disabled (model.loading || not hasSoftware) ]
-                            [ text
-                                (if model.loading then
-                                    "Updating..."
-
-                                 else if not hasSoftware then
-                                    "Select a software"
-
-                                 else
-                                    "Update Release"
-                                )
-                            ]
-                        ]
-                    ]
-            ]
+    [ div [ class "header" ]
+        [ h1 [] [ text "Edit Release" ]
+        , button [ class "btn-secondary", onClick GoBack, type_ "button" ] [ text "← Back" ]
         ]
-    }
+    , if model.loadingVersion then
+        div [ class "loading" ] [ text "Loading version..." ]
+
+      else
+        Html.form [ onSubmit FormSubmitted, class "form-card" ]
+            [ viewVersionInfo shared model.form hasSoftware individualEnabled
+            , viewCustomerSelection shared model hasSoftware individualEnabled
+            , viewCustomerStages shared model hasSoftware individualEnabled
+            , viewNotes shared model hasSoftware
+            , viewReleaseValidationSection model
+            , div [ class "form-actions" ]
+                [ button [ type_ "button", class "btn-secondary", onClick GoBack ] [ text "Cancel" ]
+                , button [ type_ "submit", class "btn-primary", disabled (model.loading || not hasSoftware) ]
+                    [ text
+                        (if model.loading then
+                            "Updating..."
+
+                         else if not hasSoftware then
+                            "Select a software"
+
+                         else
+                            "Update Release"
+                        )
+                    ]
+                ]
+            ]
+    ]
 
 
 viewError : Maybe String -> Html Msg
@@ -519,66 +555,75 @@ viewVersionInfo : Shared.Model -> Form.Model -> Bool -> Bool -> Html Msg
 viewVersionInfo shared form fieldsEnabled customEnabled =
     div []
         [ h3 [] [ text "Release Information" ]
-        , div [ class "form-group" ]
-            [ label [] [ text "Version Number" ]
-            , input
-                [ type_ "text"
-                , value form.version
-                , onInput VersionChanged
-                , placeholder "e.g., 1.0.0"
-                , required True
-                , disabled True
-                ]
-                []
-            , p [ class "help-text" ] [ text "Version number cannot be changed" ]
+        , div 
+            [ style "display" "grid"
+            , style "grid-template-columns" "1fr 1fr"
+            , style "gap" "0 2rem"
             ]
-        , div [ class "form-group" ]
-            [ label [] [ text "Software" ]
-            , select [ onInput SoftwareChanged, required True, disabled True ]
-                (option [ value "0" ] [ text "-- Select Software --" ]
-                    :: List.map
-                        (\sw ->
-                            option [ value (String.fromInt sw.id), selected (sw.id == form.softwareId) ]
-                                [ text sw.name ]
-                        )
-                        shared.software
-                )
-            , p [ class "help-text" ] [ text "Software cannot be changed" ]
-            ]
-        , div [ class "form-group" ]
-            [ label [] [ text "Release Date" ]
-            , input
-                [ type_ "date"
-                , value form.releaseDate
-                , onInput ReleaseDateChanged
-                , required True
-                , disabled (not fieldsEnabled)
-                ]
-                []
-            ]
-        , div [ class "form-group" ]
-            [ label [] [ text "Release Time" ]
-            , input
-                [ type_ "time"
-                , value form.releaseTime
-                , onInput ReleaseTimeChanged
-                , required True
-                , disabled (not fieldsEnabled)
-                ]
-                []
-            ]
-        , div [ class "form-group" ]
-            [ label [] [ text "Release Status" ]
-            , select [ onInput ReleaseStatusChanged, required True, disabled (not fieldsEnabled) ]
-                [ option [ value "PreRelease", selected (form.releaseStatus == PreRelease) ] [ text "Pre-Release" ]
-                , option [ value "Released", selected (form.releaseStatus == Released) ] [ text "Released" ]
-                , option [ value "ProductionReady", selected (form.releaseStatus == ProductionReady) ] [ text "Production Ready" ]
-                , option
-                    [ value "CustomPerCustomer"
-                    , selected (form.releaseStatus == CustomPerCustomer)
-                    , disabled (not customEnabled)
+            [ div [ class "form-group" ]
+                [ label [] [ text "Version Number" ]
+                , input
+                    [ type_ "text"
+                    , value form.version
+                    , onInput VersionChanged
+                    , placeholder "e.g., 1.0.0"
+                    , required True
+                    , disabled True
                     ]
-                    [ text "Individual customer releases" ]
+                    []
+                , p [ class "help-text" ] [ text "Version number cannot be changed" ]
+                ]
+            , div [ class "form-group" ]
+                [ label [] [ text "Software" ]
+                , select [ onInput SoftwareChanged, required True, disabled True ]
+                    (option [ value "0" ] [ text "-- Select Software --" ]
+                        :: List.map
+                            (\sw ->
+                                option [ value (String.fromInt sw.id), selected (sw.id == form.softwareId) ]
+                                    [ text sw.name ]
+                            )
+                            shared.software
+                    )
+                , p [ class "help-text" ] [ text "Software cannot be changed" ]
+                ]
+            , div [ class "form-group" ]
+                [ label [] [ text "Release Date" ]
+                , input
+                    [ type_ "date"
+                    , value form.releaseDate
+                    , onInput ReleaseDateChanged
+                    , required True
+                    , disabled (not fieldsEnabled)
+                    ]
+                    []
+                ]
+            , div [ class "form-group" ]
+                [ label [] [ text "Release Time" ]
+                , input
+                    [ type_ "time"
+                    , value form.releaseTime
+                    , onInput ReleaseTimeChanged
+                    , required True
+                    , disabled (not fieldsEnabled)
+                    ]
+                    []
+                ]
+            , div 
+                [ class "form-group"
+                , style "grid-column" "1 / -1"
+                ]
+                [ label [] [ text "Release Status" ]
+                , select [ onInput ReleaseStatusChanged, required True, disabled (not fieldsEnabled) ]
+                    [ option [ value "PreRelease", selected (form.releaseStatus == PreRelease) ] [ text "Pre-Release" ]
+                    , option [ value "Released", selected (form.releaseStatus == Released) ] [ text "Released" ]
+                    , option [ value "ProductionReady", selected (form.releaseStatus == ProductionReady) ] [ text "Production Ready" ]
+                    , option
+                        [ value "CustomPerCustomer"
+                        , selected (form.releaseStatus == CustomPerCustomer)
+                        , disabled (not customEnabled)
+                        ]
+                        [ text "Individual customer releases" ]
+                    ]
                 ]
             ]
         ]
@@ -629,7 +674,11 @@ viewCustomerStages shared model hasSoftware individualsEnabled =
                 p [ class "help-text" ] [ text "Select at least one customer to configure stages." ]
 
               else
-                div [ class "customer-stages" ]
+                div 
+                    [ class "customer-stages"
+                    , style "max-height" "300px"
+                    , style "overflow-y" "auto"
+                    ]
                     (List.map (viewCustomerStageControl model) selectedCustomers)
             ]
 
@@ -683,7 +732,11 @@ viewCountrySelection form countries enabled =
             , disabled (not enabled)
             ]
             []
-        , div [ class "customer-checkboxes" ]
+        , div 
+            [ class "customer-checkboxes"
+            , style "max-height" "300px"
+            , style "overflow-y" "auto"
+            ]
             (List.map (viewCountryCheckbox form enabled) filtered)
         ]
 
@@ -724,7 +777,11 @@ viewCustomerList form customers enabled =
             , disabled (not enabled)
             ]
             []
-        , div [ class "customer-checkboxes" ]
+        , div 
+            [ class "customer-checkboxes"
+            , style "max-height" "300px"
+            , style "overflow-y" "auto"
+            ]
             (List.map (viewCustomerCheckbox form enabled) filtered)
         ]
 
@@ -1031,7 +1088,8 @@ viewReleaseValidationSection model =
                 && model.form.releaseStatus == ProductionReady
     in
     div [ class "release-validation" ]
-        [ ReleasePath.view model.releasePathStatus
+        [ viewError model.error
+        , ReleasePath.view model.releasePathStatus
         , button
             [ type_ "button"
             , class "btn-secondary btn-small"
