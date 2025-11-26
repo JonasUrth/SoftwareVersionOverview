@@ -330,7 +330,6 @@ ToDos
    1. If fields changes (selected customers, and on edit page load)
    2. if Customer.RequiresCustomerValidation AND Release Status = ProductionReady then add a warning asking if the user is sure this release is validated by customer "customer name"
  - ✅ The add new version release form is too heigh you can not see all of it without scrolling
- - Importing old software version logs
  - ✅ Should it be possible to delete Countries, Customers, Software, Users, and Versions? How will it effect the version lists if you delete something? Customers have IsActive should we use that for all instead? Right now there are delete buttons without warnings on the pages!!
    - IMPLEMENTED: All entities (Countries, Customers, Software, Users) now use soft delete with IsActive flag
    - Backend: Changed from hard delete to soft delete, added IsActive filtering to GET endpoints
@@ -342,7 +341,10 @@ ToDos
  - ✅ Add update field validation warning on save (version exsist, returned errs from server...)
  - ✅ Printing Version Historey view
  - ✅ Select all filter contrys/customers option
- - add one more ReleaseStatus. "Canceled  or "Not Released" (or a better term if you have one). This is for when we found a bug while in prerelease state and the release should not be used for the customer. We need to update the elm app and backend
+ - ✅ add one more ReleaseStatus. "Canceled  or "Not Released" (or a better term if you have one). This is for when we found a bug while in prerelease state and the release should not be used for the customer. We need to update the elm app and backend
+ - Importing old software version logs
+   o fix dublicaged users
+   o Fix customers contrys 
 
   
  
