@@ -76,6 +76,7 @@ type Msg
     | NavigateToRoute Route.Route
     | LogoutRequested
     | LogoutResponse (Result Http.Error ())
+    | NoOp
 
 
 update : Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -204,6 +205,9 @@ update req msg model =
                 ]
             )
 
+        NoOp ->
+            ( model, Effect.none )
+
 
 -- SUBSCRIPTIONS
 
@@ -245,12 +249,12 @@ view shared req model =
                         , button [ class "btn-primary", onClick ShowAddForm ] [ text "+ Add Country" ]
                         ]
                     , viewError model.error
+                    , viewCountries shared.countries
                     , if model.showForm then
-                        viewForm model
+                        viewFormModal model
 
                       else
                         text ""
-                    , viewCountries shared.countries
                     ]
         , onNavigate = NavigateToRoute
         , onLogout = LogoutRequested
@@ -267,43 +271,48 @@ viewError error =
             text ""
 
 
-viewForm : Model -> Html Msg
-viewForm model =
-    div [ class "form-card" ]
-        [ h3 []
-            [ text
-                (if model.editingId == Nothing then
-                    "Add New Country"
-
-                 else
-                    "Edit Country"
-                )
+viewFormModal : Model -> Html Msg
+viewFormModal model =
+    div [ class "modal-overlay", onClick CancelForm ]
+        [ div
+            [ class "modal-content form-card"
+            , Html.Events.stopPropagationOn "click" (Decode.succeed ( NoOp, True ))
             ]
-        , Html.form [ onSubmit FormSubmitted ]
-            [ div [ class "form-group" ]
-                [ label [] [ text "Country Name" ]
-                , input
-                    [ type_ "text"
-                    , value model.formName
-                    , onInput NameChanged
-                    , placeholder "e.g., Denmark"
-                    , required True
-                    ]
-                    []
+            [ h3 []
+                [ text
+                    (if model.editingId == Nothing then
+                        "Add New Country"
+
+                     else
+                        "Edit Country"
+                    )
                 ]
-            , div [ class "form-group" ]
-                [ label [] [ text "Firmware Release Note" ]
-                , textarea
-                    [ value model.formNote
-                    , onInput NoteChanged
-                    , placeholder "Configuration notes for production..."
-                    , rows 3
+            , Html.form [ onSubmit FormSubmitted ]
+                [ div [ class "form-group" ]
+                    [ label [] [ text "Country Name" ]
+                    , input
+                        [ type_ "text"
+                        , value model.formName
+                        , onInput NameChanged
+                        , placeholder "e.g., Denmark"
+                        , required True
+                        ]
+                        []
                     ]
-                    []
-                ]
-            , div [ class "form-actions" ]
-                [ button [ type_ "button", class "btn-secondary", onClick CancelForm ] [ text "Cancel" ]
-                , button [ type_ "submit", class "btn-primary" ] [ text "Save" ]
+                , div [ class "form-group" ]
+                    [ label [] [ text "Firmware Release Note" ]
+                    , textarea
+                        [ value model.formNote
+                        , onInput NoteChanged
+                        , placeholder "Configuration notes for production..."
+                        , rows 3
+                        ]
+                        []
+                    ]
+                , div [ class "form-actions" ]
+                    [ button [ type_ "button", class "btn-secondary", onClick CancelForm ] [ text "Cancel" ]
+                    , button [ type_ "submit", class "btn-primary" ] [ text "Save" ]
+                    ]
                 ]
             ]
         ]

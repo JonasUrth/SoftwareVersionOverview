@@ -41,6 +41,7 @@ type alias VersionInfo =
 
 type alias ReleaseInsightRow =
     { releaseDate : String
+    , releaseDateRaw : String
     , releasedBy : String
     , releasedFor : String
     , notes : String
@@ -334,11 +335,7 @@ viewContent shared model =
                             |> filterRows model softwareList
                             |> sortRows model softwareList
                 in
-                if List.isEmpty rows then
-                    p [ class "empty" ] [ text "No releases found." ]
-
-                else
-                    viewReleaseTable model softwareList rows
+                viewReleaseTable model softwareList rows
 
 
 buildReleaseInsightRows : List Version -> Dict Int VersionDetail -> List ReleaseInsightRow
@@ -354,6 +351,7 @@ buildReleaseInsightRows versions versionDetails =
                                     if List.isEmpty detail.customers then
                                         -- If no customers, create one row with empty customer
                                         [ { releaseDate = formatDate detail.releaseDate
+                                          , releaseDateRaw = detail.releaseDate
                                           , releasedBy = detail.releasedByName
                                           , releasedFor = ""
                                           , notes = formatNotesWithSoftware detail.softwareName detail.notes
@@ -367,6 +365,7 @@ buildReleaseInsightRows versions versionDetails =
                                         List.map
                                             (\customer ->
                                                 { releaseDate = formatDate detail.releaseDate
+                                                , releaseDateRaw = detail.releaseDate
                                                 , releasedBy = detail.releasedByName
                                                 , releasedFor = customer.name
                                                 , notes = formatNotesForCustomerWithSoftware detail.softwareName customer.id detail.notes
@@ -502,6 +501,7 @@ compactRows rows =
                     Just existingRow ->
                         Dict.insert key
                             { releaseDate = row.releaseDate
+                            , releaseDateRaw = row.releaseDateRaw
                             , releasedBy = combineUsers existingRow.releasedBy row.releasedBy
                             , releasedFor = row.releasedFor
                             , notes = combineNotes existingRow.notes row.notes
@@ -607,7 +607,7 @@ fillMissingVersions : List Software -> List ReleaseInsightRow -> List ReleaseIns
 fillMissingVersions softwareList rows =
     let
         sortedRows =
-            List.sortBy .releaseDate rows
+            List.sortBy .releaseDateRaw rows
 
         fillRowForCustomer : String -> List ReleaseInsightRow -> ReleaseInsightRow -> ReleaseInsightRow
         fillRowForCustomer customerName previousRows currentRow =
@@ -663,7 +663,7 @@ sortRows model softwareList rows =
                     case column of
                         SortDate ->
                             -- Sort by date first, then customer (case-insensitive)
-                            case compare row1.releaseDate row2.releaseDate of
+                            case compare row1.releaseDateRaw row2.releaseDateRaw of
                                 LT -> LT
                                 GT -> GT
                                 EQ -> compare (String.toLower row1.releasedFor) (String.toLower row2.releasedFor)
@@ -686,28 +686,28 @@ sortRows model softwareList rows =
                             case compare version1 version2 of
                                 LT -> LT
                                 GT -> GT
-                                EQ -> compare row1.releaseDate row2.releaseDate
+                                EQ -> compare row1.releaseDateRaw row2.releaseDateRaw
 
                         SortReleasedBy ->
                             -- Sort by released by first (case-insensitive), then date
                             case compare (String.toLower row1.releasedBy) (String.toLower row2.releasedBy) of
                                 LT -> LT
                                 GT -> GT
-                                EQ -> compare row1.releaseDate row2.releaseDate
+                                EQ -> compare row1.releaseDateRaw row2.releaseDateRaw
 
                         SortReleasedFor ->
                             -- Sort by released for first (case-insensitive), then date
                             case compare (String.toLower row1.releasedFor) (String.toLower row2.releasedFor) of
                                 LT -> LT
                                 GT -> GT
-                                EQ -> compare row1.releaseDate row2.releaseDate
+                                EQ -> compare row1.releaseDateRaw row2.releaseDateRaw
 
                         SortNotes ->
                             -- Sort by notes first (case-insensitive), then date
                             case compare (String.toLower row1.notes) (String.toLower row2.notes) of
                                 LT -> LT
                                 GT -> GT
-                                EQ -> compare row1.releaseDate row2.releaseDate
+                                EQ -> compare row1.releaseDateRaw row2.releaseDateRaw
 
                         SortStatus ->
                             -- Sort by status first (case-insensitive), then date
@@ -727,7 +727,7 @@ sortRows model softwareList rows =
                             case compare status1 status2 of
                                 LT -> LT
                                 GT -> GT
-                                EQ -> compare row1.releaseDate row2.releaseDate
+                                EQ -> compare row1.releaseDateRaw row2.releaseDateRaw
 
                 sorted =
                     List.sortWith compareRows rows
@@ -906,6 +906,10 @@ filterInput value_ onChange =
 
 viewReleaseTable : Model -> List Software -> List ReleaseInsightRow -> Html Msg
 viewReleaseTable model softwareList rows =
+    let
+        columnCount =
+            4 + List.length softwareList
+    in
     div [ class "table-container table-container-fullwidth", style "overflow-x" "auto" ]
         [ table [ class "release-insight-table" ]
             [ thead []
@@ -939,7 +943,17 @@ viewReleaseTable model softwareList rows =
                            ]
                     )
                 ]
-            , tbody [] (List.map (viewReleaseRow softwareList) rows)
+            , tbody []
+                (if List.isEmpty rows then
+                    [ tr []
+                        [ td [ colspan columnCount, style "text-align" "center", style "padding" "2rem", style "color" "#64748b" ]
+                            [ text "No releases match the current filters." ]
+                        ]
+                    ]
+
+                 else
+                    List.map (viewReleaseRow softwareList) rows
+                )
             ]
         ]
 

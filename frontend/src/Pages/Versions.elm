@@ -8,7 +8,7 @@ import Gen.Params.Versions exposing (Params)
 import Gen.Route as Route
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (preventDefaultOn)
+import Html.Events exposing (onClick, onInput, preventDefaultOn)
 import Json.Decode as Decode
 import Http
 import Json.Decode as Decode
@@ -32,10 +32,32 @@ page shared req =
 -- INIT
 
 
+type SortColumn
+    = SortSoftware
+    | SortVersion
+    | SortStatus
+    | SortReleasedBy
+    | SortReleaseDate
+    | SortCustomers
+
+
+type SortDirection
+    = Ascending
+    | Descending
+
+
 type alias Model =
     { versions : List Version
     , loading : Bool
     , error : Maybe String
+    , filterSoftware : String
+    , filterVersion : String
+    , filterStatus : String
+    , filterReleasedBy : String
+    , filterReleaseDate : String
+    , filterCustomers : String
+    , sortColumn : Maybe SortColumn
+    , sortDirection : SortDirection
     }
 
 
@@ -44,6 +66,14 @@ init shared req =
     ( { versions = []
       , loading = False
       , error = Nothing
+      , filterSoftware = ""
+      , filterVersion = ""
+      , filterStatus = ""
+      , filterReleasedBy = ""
+      , filterReleaseDate = ""
+      , filterCustomers = ""
+      , sortColumn = Nothing
+      , sortDirection = Descending
       }
     , case shared.user of
         Just _ ->
@@ -89,6 +119,13 @@ type Msg
     | NavigateToRoute Route.Route
     | LogoutRequested
     | LogoutResponse (Result Http.Error ())
+    | FilterSoftwareChanged String
+    | FilterVersionChanged String
+    | FilterStatusChanged String
+    | FilterReleasedByChanged String
+    | FilterReleaseDateChanged String
+    | FilterCustomersChanged String
+    | SortColumnClicked SortColumn
 
 
 update : Shared.Model -> Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -134,6 +171,45 @@ update shared req msg model =
                 ]
             )
 
+        FilterSoftwareChanged value ->
+            ( { model | filterSoftware = value }, Effect.none )
+
+        FilterVersionChanged value ->
+            ( { model | filterVersion = value }, Effect.none )
+
+        FilterStatusChanged value ->
+            ( { model | filterStatus = value }, Effect.none )
+
+        FilterReleasedByChanged value ->
+            ( { model | filterReleasedBy = value }, Effect.none )
+
+        FilterReleaseDateChanged value ->
+            ( { model | filterReleaseDate = value }, Effect.none )
+
+        FilterCustomersChanged value ->
+            ( { model | filterCustomers = value }, Effect.none )
+
+        SortColumnClicked column ->
+            let
+                newDirection =
+                    case model.sortColumn of
+                        Just currentColumn ->
+                            if currentColumn == column then
+                                case model.sortDirection of
+                                    Ascending ->
+                                        Descending
+
+                                    Descending ->
+                                        Ascending
+
+                            else
+                                Ascending
+
+                        Nothing ->
+                            Ascending
+            in
+            ( { model | sortColumn = Just column, sortDirection = newDirection }, Effect.none )
+
 
 -- SUBSCRIPTIONS
 
@@ -141,6 +217,82 @@ update shared req msg model =
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.none
+
+
+-- FILTER AND SORT
+
+
+filterVersions : Model -> List Version -> List Version
+filterVersions model versions =
+    versions
+        |> List.filter
+            (\version ->
+                let
+                    softwareMatch =
+                        String.isEmpty model.filterSoftware
+                            || String.contains (String.toLower model.filterSoftware) (String.toLower version.softwareName)
+
+                    versionMatch =
+                        String.isEmpty model.filterVersion
+                            || String.contains (String.toLower model.filterVersion) (String.toLower version.version)
+
+                    statusMatch =
+                        String.isEmpty model.filterStatus
+                            || String.contains (String.toLower model.filterStatus) (String.toLower (releaseStatusLabel version.releaseStatus))
+
+                    releasedByMatch =
+                        String.isEmpty model.filterReleasedBy
+                            || String.contains (String.toLower model.filterReleasedBy) (String.toLower version.releasedBy)
+
+                    releaseDateMatch =
+                        String.isEmpty model.filterReleaseDate
+                            || String.contains (String.toLower model.filterReleaseDate) (String.toLower (formatDateTime version.releaseDate))
+
+                    customersMatch =
+                        String.isEmpty model.filterCustomers
+                            || String.contains (String.toLower model.filterCustomers) (String.toLower (String.fromInt version.customerCount))
+                in
+                softwareMatch && versionMatch && statusMatch && releasedByMatch && releaseDateMatch && customersMatch
+            )
+
+
+sortVersions : Model -> List Version -> List Version
+sortVersions model versions =
+    case model.sortColumn of
+        Just column ->
+            let
+                compareVersions v1 v2 =
+                    case column of
+                        SortSoftware ->
+                            compare (String.toLower v1.softwareName) (String.toLower v2.softwareName)
+
+                        SortVersion ->
+                            compare (String.toLower v1.version) (String.toLower v2.version)
+
+                        SortStatus ->
+                            compare (releaseStatusLabel v1.releaseStatus) (releaseStatusLabel v2.releaseStatus)
+
+                        SortReleasedBy ->
+                            compare (String.toLower v1.releasedBy) (String.toLower v2.releasedBy)
+
+                        SortReleaseDate ->
+                            compare v1.releaseDate v2.releaseDate
+
+                        SortCustomers ->
+                            compare v1.customerCount v2.customerCount
+
+                sorted =
+                    List.sortWith compareVersions versions
+            in
+            case model.sortDirection of
+                Ascending ->
+                    sorted
+
+                Descending ->
+                    List.reverse sorted
+
+        Nothing ->
+            versions
 
 
 -- VIEW
@@ -190,19 +342,43 @@ viewContent model =
         p [ class "empty" ] [ text "No versions created yet. Create one to get started!" ]
 
     else
+        let
+            filteredAndSorted =
+                model.versions
+                    |> filterVersions model
+                    |> sortVersions model
+        in
         div [ class "table-container" ]
-            [ table []
+            [ table [ class "versions-table" ]
                 [ thead []
                     [ tr []
-                        [ th [] [ text "Software" ]
-                        , th [] [ text "Version" ]
-                        , th [] [ text "Status" ]
-                        , th [] [ text "Released By" ]
-                        , th [] [ text "Release Date" ]
-                        , th [] [ text "Customers" ]
+                        [ viewSortableHeader model SortSoftware "Software" []
+                        , viewSortableHeader model SortVersion "Version" []
+                        , viewSortableHeader model SortStatus "Status" []
+                        , viewSortableHeader model SortReleasedBy "Released By" []
+                        , viewSortableHeader model SortReleaseDate "Release Date" []
+                        , viewSortableHeader model SortCustomers "Customers" []
+                        ]
+                    , tr [ class "filter-row" ]
+                        [ viewFilterInputCell model SortSoftware [] (filterInput model.filterSoftware FilterSoftwareChanged)
+                        , viewFilterInputCell model SortVersion [] (filterInput model.filterVersion FilterVersionChanged)
+                        , viewFilterInputCell model SortStatus [] (filterInput model.filterStatus FilterStatusChanged)
+                        , viewFilterInputCell model SortReleasedBy [] (filterInput model.filterReleasedBy FilterReleasedByChanged)
+                        , viewFilterInputCell model SortReleaseDate [] (filterInput model.filterReleaseDate FilterReleaseDateChanged)
+                        , viewFilterInputCell model SortCustomers [] (filterInput model.filterCustomers FilterCustomersChanged)
                         ]
                     ]
-                , tbody [] (List.map viewVersionRow model.versions)
+                , tbody []
+                    (if List.isEmpty filteredAndSorted then
+                        [ tr []
+                            [ td [ colspan 6, style "text-align" "center", style "padding" "2rem", style "color" "#64748b" ]
+                                [ text "No versions match the current filters." ]
+                            ]
+                        ]
+
+                     else
+                        List.map viewVersionRow filteredAndSorted
+                    )
                 ]
             ]
 
@@ -321,3 +497,113 @@ monthName month =
 
         _ ->
             month
+
+
+viewSortableHeader : Model -> SortColumn -> String -> List (Attribute Msg) -> Html Msg
+viewSortableHeader model column label attrs =
+    let
+        headerAttrs =
+            [ onClick (SortColumnClicked column)
+            , style "cursor" "pointer"
+            , style "user-select" "none"
+            ]
+                ++ attrs
+    in
+    th headerAttrs
+        [ text label ]
+
+
+viewFilterInputCell : Model -> SortColumn -> List (Attribute Msg) -> Html Msg -> Html Msg
+viewFilterInputCell model column attrs inputField =
+    let
+        isActive =
+            model.sortColumn == Just column
+
+        indicatorText =
+            if isActive then
+                case model.sortDirection of
+                    Ascending ->
+                        "▲"
+
+                    Descending ->
+                        "▼"
+
+            else
+                "▲"
+
+        indicatorClass =
+            String.join " "
+                ([ "sort-indicator"
+                 , "sort-indicator-button"
+                 ]
+                    ++ (if isActive then
+                            [ "sort-indicator-active" ]
+
+                        else
+                            [ "sort-indicator-inactive" ]
+                       )
+                )
+    in
+    th attrs
+        [ div [ class "filter-cell" ]
+            [ inputField
+            , span
+                [ class indicatorClass
+                , title "Change sort order"
+                , onClick (SortColumnClicked column)
+                ]
+                [ text indicatorText ]
+            ]
+        ]
+
+
+filterInput : String -> (String -> Msg) -> Html Msg
+filterInput value_ onChange =
+    let
+        hasFilter =
+            not (String.isEmpty (String.trim value_))
+
+        inputAttrs =
+            [ type_ "text"
+            , placeholder "Filter..."
+            , value value_
+            , onInput onChange
+            , style "width" "100%"
+            , style "padding" "4px"
+            , style "padding-right" "2rem"
+            , style "box-sizing" "border-box"
+            ]
+                ++ (if hasFilter then
+                        [ style "border-color" "#dc2626"
+                        , style "background-color" "#fff5f5"
+                        ]
+
+                    else
+                        []
+                   )
+    in
+    div
+        [ style "position" "relative"
+        , style "display" "flex"
+        ]
+        [ input inputAttrs []
+        , button
+            [ type_ "button"
+            , class "btn-small"
+            , onClick (onChange "")
+            , disabled (not hasFilter)
+            , title "Clear filter"
+            , style "position" "absolute"
+            , style "right" "0.25rem"
+            , style "top" "50%"
+            , style "transform" "translateY(-50%)"
+            , style "border" "none"
+            , style "background" "transparent"
+            , style "font-size" "1.25rem"
+            , style "cursor" (if hasFilter then "pointer" else "default")
+            , style "color" (if hasFilter then "#b91c1c" else "#94a3b8")
+            , style "padding" "0"
+            , style "line-height" "1"
+            ]
+            [ text "×" ]
+        ]

@@ -81,6 +81,7 @@ type Msg
     | NavigateToRoute Route.Route
     | LogoutRequested
     | LogoutResponse (Result Http.Error ())
+    | NoOp
 
 
 update : Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -245,6 +246,9 @@ update req msg model =
                 ]
             )
 
+        NoOp ->
+            ( model, Effect.none )
+
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
@@ -280,12 +284,12 @@ view shared req model =
                         , button [ class "btn-primary", onClick ShowAddForm ] [ text "+ Add Software" ]
                         ]
                     , viewError model.error
+                    , viewSoftwareList shared.software
                     , if model.showForm then
-                        viewForm model
+                        viewFormModal model
 
                       else
                         text ""
-                    , viewSoftwareList shared.software
                     ]
         , onNavigate = NavigateToRoute
         , onLogout = LogoutRequested
@@ -303,68 +307,73 @@ viewError maybeError =
             text ""
 
 
-viewForm : Model -> Html Msg
-viewForm model =
-    div [ class "form-card" ]
-        [ h3 []
-            [ text
-                (if model.editingId == Nothing then
-                    "Add New Software"
-
-                 else
-                    "Edit Software"
-                )
+viewFormModal : Model -> Html Msg
+viewFormModal model =
+    div [ class "modal-overlay", onClick CancelForm ]
+        [ div
+            [ class "modal-content form-card"
+            , Html.Events.stopPropagationOn "click" (Decode.succeed ( NoOp, True ))
             ]
-        , Html.form [ onSubmit FormSubmitted ]
-            [ div [ class "form-group" ]
-                [ label [] [ text "Name" ]
-                , input [ type_ "text", value model.formName, onInput NameChanged, required True ] []
-                ]
-            , div [ class "form-group" ]
-                [ label [] [ text "Type" ]
-                , select [ onInput TypeChanged, required True ]
-                    [ option [ value "" ] [ text "-- Select Type --" ]
-                    , option [ value "Firmware", selected (model.formType == "Firmware") ] [ text "Firmware" ]
-                    , option [ value "Windows", selected (model.formType == "Windows") ] [ text "Windows" ]
-                    ]
-                ]
-            , div [ class "form-group" ]
-                [ label [] [ text "File Location" ]
-                , input [ type_ "text", value model.formFileLocation, onInput FileLocationChanged, placeholder "L:\\_Software\\Releases\\Firmware - Eprom\\x200F\\{{VERSION}}" ] []
-                , small [ style "color" "#666", style "font-size" "0.9em" ]
-                    [ text "Example: L:\\_Software\\Releases\\Firmware - Eprom\\x200F\\{{VERSION}}.bin" ]
-                ]
-            , div [ class "form-group" ]
-                [ label [] [ text "Release Method" ]
-                , select [ onInput ReleaseMethodChanged ]
-                    [ option [ value "", selected (model.formReleaseMethod == Nothing) ] [ text "-- Select Release Method --" ]
-                    , option
-                        [ value (releaseMethodToString FindFile)
-                        , selected (model.formReleaseMethod == Just FindFile)
-                        ]
-                        [ text "Find file" ]
-                    , option
-                        [ value (releaseMethodToString CreateCD)
-                        , selected (model.formReleaseMethod == Just CreateCD)
-                        ]
-                        [ text "Create CD" ]
-                    , option
-                        [ value (releaseMethodToString FindFolder)
-                        , selected (model.formReleaseMethod == Just FindFolder)
-                        ]
-                        [ text "Find folder" ]
-                    ]
-                ]
-            , div [ class "form-actions" ]
-                [ button [ type_ "button", class "btn-secondary", onClick CancelForm ] [ text "Cancel" ]
-                , button [ type_ "submit", class "btn-primary" ]
-                    [ text
-                        (if model.editingId == Nothing then
-                            "Save"
+            [ h3 []
+                [ text
+                    (if model.editingId == Nothing then
+                        "Add New Software"
 
-                         else
-                            "Update"
-                        )
+                     else
+                        "Edit Software"
+                    )
+                ]
+            , Html.form [ onSubmit FormSubmitted ]
+                [ div [ class "form-group" ]
+                    [ label [] [ text "Name" ]
+                    , input [ type_ "text", value model.formName, onInput NameChanged, required True ] []
+                    ]
+                , div [ class "form-group" ]
+                    [ label [] [ text "Type" ]
+                    , select [ onInput TypeChanged, required True ]
+                        [ option [ value "" ] [ text "-- Select Type --" ]
+                        , option [ value "Firmware", selected (model.formType == "Firmware") ] [ text "Firmware" ]
+                        , option [ value "Windows", selected (model.formType == "Windows") ] [ text "Windows" ]
+                        ]
+                    ]
+                , div [ class "form-group" ]
+                    [ label [] [ text "File Location" ]
+                    , input [ type_ "text", value model.formFileLocation, onInput FileLocationChanged, placeholder "L:\\_Software\\Releases\\Firmware - Eprom\\x200F\\{{VERSION}}" ] []
+                    , small [ style "color" "#666", style "font-size" "0.9em" ]
+                        [ text "Example: L:\\_Software\\Releases\\Firmware - Eprom\\x200F\\{{VERSION}}.bin" ]
+                    ]
+                , div [ class "form-group" ]
+                    [ label [] [ text "Release Method" ]
+                    , select [ onInput ReleaseMethodChanged ]
+                        [ option [ value "", selected (model.formReleaseMethod == Nothing) ] [ text "-- Select Release Method --" ]
+                        , option
+                            [ value (releaseMethodToString FindFile)
+                            , selected (model.formReleaseMethod == Just FindFile)
+                            ]
+                            [ text "Find file" ]
+                        , option
+                            [ value (releaseMethodToString CreateCD)
+                            , selected (model.formReleaseMethod == Just CreateCD)
+                            ]
+                            [ text "Create CD" ]
+                        , option
+                            [ value (releaseMethodToString FindFolder)
+                            , selected (model.formReleaseMethod == Just FindFolder)
+                            ]
+                            [ text "Find folder" ]
+                        ]
+                    ]
+                , div [ class "form-actions" ]
+                    [ button [ type_ "button", class "btn-secondary", onClick CancelForm ] [ text "Cancel" ]
+                    , button [ type_ "submit", class "btn-primary" ]
+                        [ text
+                            (if model.editingId == Nothing then
+                                "Save"
+
+                             else
+                                "Update"
+                            )
+                        ]
                     ]
                 ]
             ]

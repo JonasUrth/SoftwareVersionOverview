@@ -102,6 +102,7 @@ type Msg
     | NavigateToRoute Route.Route
     | LogoutRequested
     | LogoutResponse (Result Http.Error ())
+    | NoOp
 
 
 update : Shared.Model -> Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -237,6 +238,9 @@ update shared req msg model =
                 ]
             )
 
+        NoOp ->
+            ( model, Effect.none )
+
 
 -- SUBSCRIPTIONS
 
@@ -281,12 +285,14 @@ view shared req model =
                     , if model.loading then
                         p [] [ text "Loading users..." ]
 
-                      else if model.showForm then
-                        viewForm model
-
                       else
                         text ""
                     , viewUsers model.users
+                    , if model.showForm then
+                        viewFormModal model
+
+                      else
+                        text ""
                     ]
         , onNavigate = NavigateToRoute
         , onLogout = LogoutRequested
@@ -303,50 +309,55 @@ viewError error =
             text ""
 
 
-viewForm : Model -> Html Msg
-viewForm model =
-    div [ class "form-card" ]
-        [ h3 []
-            [ text
-                (if model.editingId == Nothing then
-                    "Add New User"
-
-                 else
-                    "Edit User"
-                )
+viewFormModal : Model -> Html Msg
+viewFormModal model =
+    div [ class "modal-overlay", onClick CancelForm ]
+        [ div
+            [ class "modal-content form-card"
+            , Html.Events.stopPropagationOn "click" (Decode.succeed ( NoOp, True ))
             ]
-        , Html.form [ onSubmit FormSubmitted ]
-            [ div [ class "form-group" ]
-                [ label [] [ text "Username" ]
-                , input
-                    [ type_ "text"
-                    , value model.formName
-                    , onInput NameChanged
-                    , placeholder "e.g., admin"
-                    , required True
-                    ]
-                    []
-                ]
-            , div [ class "form-group" ]
-                [ label [] [ text "Password" ]
-                , input
-                    [ type_ "password"
-                    , value model.formPassword
-                    , onInput PasswordChanged
-                    , placeholder
-                        (if model.editingId == Nothing then
-                            "Enter password"
+            [ h3 []
+                [ text
+                    (if model.editingId == Nothing then
+                        "Add New User"
 
-                         else
-                            "Enter new password (leave blank to keep current)"
-                        )
-                    , required (model.editingId == Nothing)
-                    ]
-                    []
+                     else
+                        "Edit User"
+                    )
                 ]
-            , div [ class "form-actions" ]
-                [ button [ type_ "button", class "btn-secondary", onClick CancelForm ] [ text "Cancel" ]
-                , button [ type_ "submit", class "btn-primary" ] [ text "Save" ]
+            , Html.form [ onSubmit FormSubmitted ]
+                [ div [ class "form-group" ]
+                    [ label [] [ text "Username" ]
+                    , input
+                        [ type_ "text"
+                        , value model.formName
+                        , onInput NameChanged
+                        , placeholder "e.g., admin"
+                        , required True
+                        ]
+                        []
+                    ]
+                , div [ class "form-group" ]
+                    [ label [] [ text "Password" ]
+                    , input
+                        [ type_ "password"
+                        , value model.formPassword
+                        , onInput PasswordChanged
+                        , placeholder
+                            (if model.editingId == Nothing then
+                                "Enter password"
+
+                             else
+                                "Enter new password (leave blank to keep current)"
+                            )
+                        , required (model.editingId == Nothing)
+                        ]
+                        []
+                    ]
+                , div [ class "form-actions" ]
+                    [ button [ type_ "button", class "btn-secondary", onClick CancelForm ] [ text "Cancel" ]
+                    , button [ type_ "submit", class "btn-primary" ] [ text "Save" ]
+                    ]
                 ]
             ]
         ]

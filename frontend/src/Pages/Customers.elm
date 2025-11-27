@@ -89,6 +89,7 @@ type Msg
     | NavigateToRoute Route.Route
     | LogoutRequested
     | LogoutResponse (Result Http.Error ())
+    | NoOp
 
 
 update : Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
@@ -245,6 +246,9 @@ update req msg model =
                 ]
             )
 
+        NoOp ->
+            ( model, Effect.none )
+
 
 -- SUBSCRIPTIONS
 
@@ -287,12 +291,12 @@ view shared req model =
                         ]
                     , viewError model.error
                     , viewFilterBar model
+                    , viewCustomers shared.customers
                     , if model.showForm then
-                        viewForm shared model
+                        viewFormModal shared model
 
                       else
                         text ""
-                    , viewCustomers shared.customers
                     ]
         , onNavigate = NavigateToRoute
         , onLogout = LogoutRequested
@@ -324,73 +328,78 @@ viewFilterBar model =
         ]
 
 
-viewForm : Shared.Model -> Model -> Html Msg
-viewForm shared model =
-    div [ class "form-card" ]
-        [ h3 []
-            [ text
-                (if model.editingId == Nothing then
-                    "Add New Customer"
-
-                 else
-                    "Edit Customer"
-                )
+viewFormModal : Shared.Model -> Model -> Html Msg
+viewFormModal shared model =
+    div [ class "modal-overlay", onClick CancelForm ]
+        [ div
+            [ class "modal-content form-card"
+            , Html.Events.stopPropagationOn "click" (Decode.succeed ( NoOp, True ))
             ]
-        , Html.form [ onSubmit FormSubmitted ]
-            [ div [ class "form-group" ]
-                [ label [] [ text "Customer Name" ]
-                , input
-                    [ type_ "text"
-                    , value model.formName
-                    , onInput NameChanged
-                    , placeholder "e.g., ACME Corp"
-                    , required True
-                    ]
-                    []
-                ]
-            , div [ class "form-group" ]
-                [ label [] [ text "Country" ]
-                , select
-                    [ onInput CountryChanged
-                    , required True
-                    ]
-                    (option [ value "0" ] [ text "-- Select Country --" ]
-                        :: List.map
-                            (\country ->
-                                option
-                                    [ value (String.fromInt country.id)
-                                    , selected (country.id == model.formCountryId)
-                                    ]
-                                    [ text country.name ]
-                            )
-                            shared.countries
+            [ h3 []
+                [ text
+                    (if model.editingId == Nothing then
+                        "Add New Customer"
+
+                     else
+                        "Edit Customer"
                     )
                 ]
-            , div [ class "form-group" ]
-                [ label []
-                    [ input
-                        [ type_ "checkbox"
-                        , checked model.formIsActive
-                        , onClick (IsActiveChanged (not model.formIsActive))
+            , Html.form [ onSubmit FormSubmitted ]
+                [ div [ class "form-group" ]
+                    [ label [] [ text "Customer Name" ]
+                    , input
+                        [ type_ "text"
+                        , value model.formName
+                        , onInput NameChanged
+                        , placeholder "e.g., ACME Corp"
+                        , required True
                         ]
                         []
-                    , text " Active"
                     ]
-                ]
-            , div [ class "form-group" ]
-                [ label []
-                    [ input
-                        [ type_ "checkbox"
-                        , checked model.formRequiresValidation
-                        , onClick (RequiresValidationChanged (not model.formRequiresValidation))
+                , div [ class "form-group" ]
+                    [ label [] [ text "Country" ]
+                    , select
+                        [ onInput CountryChanged
+                        , required True
                         ]
-                        []
-                    , text " Requires Customer Validation"
+                        (option [ value "0" ] [ text "-- Select Country --" ]
+                            :: List.map
+                                (\country ->
+                                    option
+                                        [ value (String.fromInt country.id)
+                                        , selected (country.id == model.formCountryId)
+                                        ]
+                                        [ text country.name ]
+                                )
+                                shared.countries
+                        )
                     ]
-                ]
-            , div [ class "form-actions" ]
-                [ button [ type_ "button", class "btn-secondary", onClick CancelForm ] [ text "Cancel" ]
-                , button [ type_ "submit", class "btn-primary" ] [ text "Save" ]
+                , div [ class "form-group" ]
+                    [ label []
+                        [ input
+                            [ type_ "checkbox"
+                            , checked model.formIsActive
+                            , onClick (IsActiveChanged (not model.formIsActive))
+                            ]
+                            []
+                        , text " Active"
+                        ]
+                    ]
+                , div [ class "form-group" ]
+                    [ label []
+                        [ input
+                            [ type_ "checkbox"
+                            , checked model.formRequiresValidation
+                            , onClick (RequiresValidationChanged (not model.formRequiresValidation))
+                            ]
+                            []
+                        , text " Requires Customer Validation"
+                        ]
+                    ]
+                , div [ class "form-actions" ]
+                    [ button [ type_ "button", class "btn-secondary", onClick CancelForm ] [ text "Cancel" ]
+                    , button [ type_ "submit", class "btn-primary" ] [ text "Save" ]
+                    ]
                 ]
             ]
         ]

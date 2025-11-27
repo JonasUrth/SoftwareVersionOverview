@@ -337,6 +337,44 @@ tr.inactive td {
     color: #b0b8c1;
 }
 
+/* Sort indicator styling for versions table */
+.versions-table .sort-indicator {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin-left: 4px;
+}
+
+.versions-table .sort-indicator-button {
+    cursor: pointer;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.versions-table .sort-indicator-active {
+    color: #3498db;
+}
+
+.versions-table .sort-indicator-inactive {
+    color: #b0b8c1;
+}
+
+.versions-table .filter-row {
+    background-color: #f8f9fa;
+}
+
+.versions-table .filter-row th {
+    padding: 8px;
+    vertical-align: middle;
+}
+
+.versions-table .filter-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+}
+
 /* Login */
 .login-box {
     max-width: 400px;
@@ -642,6 +680,44 @@ nav a:hover {
 
 
 
+/* Sort indicator styling for firmware table */
+.firmware-table .sort-indicator {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin-left: 4px;
+}
+
+.firmware-table .sort-indicator-button {
+    cursor: pointer;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.firmware-table .sort-indicator-active {
+    color: #3498db;
+}
+
+.firmware-table .sort-indicator-inactive {
+    color: #b0b8c1;
+}
+
+.firmware-table .filter-row {
+    background-color: #f8f9fa;
+}
+
+.firmware-table .filter-row th {
+    padding: 8px;
+    vertical-align: middle;
+}
+
+.firmware-table .filter-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+}
+
 /* Customer Checkboxes */
 .customer-checkboxes {
     display: flex;
@@ -900,5 +976,39 @@ nav a:hover {
     @page {
         margin: 1cm;
         size: landscape;
+    }
+}
+
+/* Modal Overlay */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 2rem;
+}
+
+.modal-content {
+    max-width: 600px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: modalFadeIn 0.2s ease-out;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
