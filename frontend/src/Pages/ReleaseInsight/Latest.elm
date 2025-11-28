@@ -60,6 +60,9 @@ type alias Model =
     , installerState : InstallerState
     , softwareError : Maybe String
     , customersError : Maybe String
+    , customerFilter : String
+    , customerDropdownOpen : Bool
+    , highlightedCustomerIndex : Int
     }
 
 
@@ -84,6 +87,9 @@ init shared _ =
       , installerState = InstallerIdle
       , softwareError = Nothing
       , customersError = Nothing
+      , customerFilter = ""
+      , customerDropdownOpen = False
+      , highlightedCustomerIndex = 0
       }
     , Effect.batch
         [ fetchSoftware
@@ -101,6 +107,12 @@ type Msg
     | GotCustomers (Result Http.Error (List Customer))
     | SoftwareSelected String
     | CustomerSelected String
+    | CustomerFilterChanged String
+    | CustomerDropdownFocused
+    | CustomerDropdownBlurred
+    | CustomerInputClicked
+    | CustomerItemClicked Int
+    | CustomerKeyDown String
     | GotLatestRelease (Result Http.Error VersionDetail)
     | OpenInstallerClicked
     | InstallerOpened (Result Http.Error ())
@@ -143,7 +155,7 @@ update shared req msg model =
 
         GotCustomers (Ok customers) ->
             ( { model
-                | customers = customers |> List.sortBy .name
+                | customers = customers |> List.sortWith sortCustomers
                 , customersLoading = False
                 , customersError = Nothing
               }
@@ -213,6 +225,57 @@ update shared req msg model =
                       }
                     , Effect.none
                     )
+
+        CustomerFilterChanged filterText ->
+            ( { model 
+                | customerFilter = filterText
+                , customerDropdownOpen = True
+                , highlightedCustomerIndex = 0
+                , selectedCustomer = Nothing
+                , latestRelease = Nothing
+                , latestError = Nothing
+              }
+            , Effect.none
+            )
+
+        CustomerDropdownFocused ->
+            ( { model 
+                | customerDropdownOpen = True
+                , customerFilter = ""
+                , highlightedCustomerIndex = 0
+              }
+            , Effect.none
+            )
+
+        CustomerInputClicked ->
+            ( model, Effect.none )
+
+        CustomerDropdownBlurred ->
+            ( { model | customerDropdownOpen = False }, Effect.none )
+
+        CustomerItemClicked customerId ->
+            let
+                nextModel =
+                    { model
+                        | selectedCustomer = Just customerId
+                        , customerDropdownOpen = False
+                        , latestRelease = Nothing
+                        , latestError = Nothing
+                        , installerState = InstallerIdle
+                        , customerFilter = ""
+                    }
+            in
+            case model.selectedSoftware of
+                Just softwareId ->
+                    ( { nextModel | latestLoading = True }
+                    , fetchLatestRelease softwareId customerId
+                    )
+
+                Nothing ->
+                    ( nextModel, Effect.none )
+
+        CustomerKeyDown key ->
+            handleCustomerKeyDown key model
 
         GotLatestRelease (Ok detail) ->
             ( { model
@@ -284,6 +347,87 @@ update shared req msg model =
             )
 
 
+handleCustomerKeyDown : String -> Model -> ( Model, Effect Msg )
+handleCustomerKeyDown key model =
+    let
+        filteredCustomers =
+            getFilteredCustomers model
+        
+        maxIndex =
+            Basics.max 0 (List.length filteredCustomers - 1)
+    in
+    case key of
+        "ArrowDown" ->
+            ( { model
+                | highlightedCustomerIndex = Basics.min maxIndex (model.highlightedCustomerIndex + 1)
+                , customerDropdownOpen = True
+              }
+            , Effect.none
+            )
+
+        "ArrowUp" ->
+            ( { model
+                | highlightedCustomerIndex = Basics.max 0 (model.highlightedCustomerIndex - 1)
+                , customerDropdownOpen = True
+              }
+            , Effect.none
+            )
+
+        "Enter" ->
+            if model.customerDropdownOpen && not (List.isEmpty filteredCustomers) then
+                case List.drop model.highlightedCustomerIndex filteredCustomers |> List.head of
+                    Just customer ->
+                        let
+                            nextModel =
+                                { model
+                                    | selectedCustomer = Just customer.id
+                                    , customerDropdownOpen = False
+                                    , latestRelease = Nothing
+                                    , latestError = Nothing
+                                    , installerState = InstallerIdle
+                                    , customerFilter = ""
+                                }
+                        in
+                        case model.selectedSoftware of
+                            Just softwareId ->
+                                ( { nextModel | latestLoading = True }
+                                , fetchLatestRelease softwareId customer.id
+                                )
+
+                            Nothing ->
+                                ( nextModel, Effect.none )
+
+                    Nothing ->
+                        ( model, Effect.none )
+
+            else
+                ( model, Effect.none )
+
+        "Escape" ->
+            ( { model | customerDropdownOpen = False }, Effect.none )
+
+        _ ->
+            ( model, Effect.none )
+
+
+getFilteredCustomers : Model -> List Customer
+getFilteredCustomers model =
+    if String.isEmpty model.customerFilter then
+        model.customers
+
+    else
+        let
+            lowerFilter =
+                String.toLower model.customerFilter
+        in
+        model.customers
+            |> List.filter
+                (\customer ->
+                    String.contains lowerFilter (String.toLower customer.name)
+                        || String.contains lowerFilter (String.toLower customer.country.name)
+                )
+
+
 
 -- EFFECT HELPERS
 
@@ -345,6 +489,16 @@ subscriptions _ =
 -- VIEW
 
 
+sortCustomers : Customer -> Customer -> Order
+sortCustomers a b =
+    case compare a.country.name b.country.name of
+        EQ ->
+            compare a.name b.name
+
+        other ->
+            other
+
+
 view : Shared.Model -> Request.With Params -> Model -> View Msg
 view shared req model =
     Layouts.Default.view
@@ -373,6 +527,21 @@ viewSelectionForm model =
                 [ model.softwareError
                 , model.customersError
                 ]
+
+        filteredCustomers =
+            getFilteredCustomers model
+
+        displayText =
+            case model.selectedCustomer of
+                Just customerId ->
+                    model.customers
+                        |> List.filter (\c -> c.id == customerId)
+                        |> List.head
+                        |> Maybe.map (\c -> c.country.name ++ " - " ++ c.name)
+                        |> Maybe.withDefault ""
+
+                Nothing ->
+                    model.customerFilter
     in
     div [ class "selection-form" ]
         ([ div [ class "form-group" ]
@@ -388,18 +557,9 @@ viewSelectionForm model =
             ]
          , div [ class "form-group" ]
             [ label [] [ text "2. Choose customer" ]
-            , select
-                [ onInput CustomerSelected
-                , class "form-control"
-                , disabled (model.selectedSoftware == Nothing || model.customersLoading)
-                ]
-                (option [ value "" ] [ text "Select customer..." ]
-                    :: List.map
-                        (viewCustomerOption model.selectedCustomer)
-                        model.customers
-                )
+            , viewCustomerCombobox model displayText filteredCustomers
             , p [ class "help-text" ]
-                [ text "Customers become available after a Windows software is selected." ]
+                [ text "Customers become available after a Windows software is selected. Type to filter by country or customer name." ]
             ]
          ]
             ++ (if model.softwareLoading || model.customersLoading then
@@ -428,25 +588,93 @@ viewSoftwareOption selectedId software =
         [ text software.name ]
 
 
-viewCustomerOption : Maybe Int -> Customer -> Html Msg
-viewCustomerOption selectedId customer =
+viewCustomerCombobox : Model -> String -> List Customer -> Html Msg
+viewCustomerCombobox model displayValue filteredCustomers =
+    let
+        isDisabled =
+            model.selectedSoftware == Nothing || model.customersLoading
+
+        showDropdown =
+            model.customerDropdownOpen && not isDisabled && not (List.isEmpty filteredCustomers)
+    in
+    div [ class "custom-combobox" ]
+        [ input
+            [ type_ "text"
+            , class "form-control"
+            , placeholder "Type to filter by country or customer name..."
+            , value displayValue
+            , onInput CustomerFilterChanged
+            , Html.Events.onFocus CustomerDropdownFocused
+            , Html.Events.onBlur CustomerDropdownBlurred
+            , onClickSelect CustomerInputClicked
+            , onKeyDown CustomerKeyDown
+            , disabled isDisabled
+            , id "customer-search-input"
+            ]
+            []
+        , if showDropdown then
+            div [ class "combobox-dropdown" ]
+                (filteredCustomers
+                    |> List.take 50
+                    |> List.indexedMap (\index customer -> viewCustomerDropdownItem model.selectedCustomer model.highlightedCustomerIndex index customer)
+                )
+
+          else
+            text ""
+        ]
+
+
+onKeyDown : (String -> msg) -> Attribute msg
+onKeyDown tagger =
+    Html.Events.on "keydown" (Decode.map tagger (Decode.field "key" Decode.string))
+
+
+onClickSelect : msg -> Attribute msg
+onClickSelect msg =
+    Html.Events.custom "click"
+        (Decode.succeed
+            { message = msg
+            , stopPropagation = False
+            , preventDefault = False
+            }
+        )
+
+
+viewCustomerDropdownItem : Maybe Int -> Int -> Int -> Customer -> Html Msg
+viewCustomerDropdownItem selectedId highlightedIndex currentIndex customer =
     let
         labelText =
-            customer.name
+            customer.country.name
                 ++ " - "
-                ++ customer.country.name
+                ++ customer.name
                 ++ (if customer.isActive then
                         ""
 
                     else
                         " (inactive)"
                    )
+
+        isSelected =
+            selectedId == Just customer.id
+        
+        isHighlighted =
+            highlightedIndex == currentIndex
+        
+        itemClass =
+            if isSelected then
+                "combobox-item combobox-item-selected"
+            else if isHighlighted then
+                "combobox-item combobox-item-highlighted"
+            else
+                "combobox-item"
     in
-    option
-        [ value (String.fromInt customer.id)
-        , selected (selectedId == Just customer.id)
+    div
+        [ class itemClass
+        , Html.Events.onMouseDown (CustomerItemClicked customer.id)
         ]
         [ text labelText ]
+
+
 
 
 viewLatestReleaseSection : Model -> Html Msg

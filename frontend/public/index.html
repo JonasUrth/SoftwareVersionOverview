@@ -32,6 +32,13 @@
         window.print()
       })
     }
+
+    // Handle text selection in customer search input
+    document.addEventListener('click', function(e) {
+      if (e.target && e.target.id === 'customer-search-input') {
+        e.target.select()
+      }
+    })
   </script>
 </body>
 </html>
