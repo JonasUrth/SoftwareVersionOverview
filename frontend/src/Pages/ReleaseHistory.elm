@@ -3,19 +3,22 @@ module Pages.ReleaseHistory exposing (Model, Msg, page)
 import Api.Auth
 import Api.Data exposing (CustomerReleaseStage(..), NoteDetail, ReleaseStatus(..), Software, VersionDetail, releaseStatusFromString, releaseStatusLabel, releaseStatusToString, versionDetailDecoder)
 import Api.Endpoint as Endpoint
+import Browser.Dom
+import Browser.Navigation
 import Dict exposing (Dict)
 import Effect exposing (Effect)
 import Gen.Params.ReleaseHistory exposing (Params)
 import Gen.Route as Route
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, onInput)
+import Html.Events exposing (onClick, onInput, preventDefaultOn)
 import Http
 import Json.Decode as Decode
 import Layouts.Default
 import Page
 import Request
 import Shared
+import Task
 import View exposing (View)
 
 
@@ -35,6 +38,7 @@ page shared req =
 type alias VersionInfo =
     { version : String
     , isFromCurrentDate : Bool
+    , versionId : Int
     }
 
 
@@ -77,24 +81,55 @@ type alias Model =
     , filterSoftwareVersions : Dict Int String
     , sortColumn : Maybe SortColumn
     , sortDirection : SortDirection
+    , pendingNavigation : Maybe Int
     }
 
 
 init : Shared.Model -> Request.With Params -> ( Model, Effect Msg )
 init shared req =
+    let
+        -- Restore state from shared model if available
+        savedState =
+            shared.releaseHistoryState
+        
+        compactView =
+            savedState |> Maybe.map .compactView |> Maybe.withDefault True
+        
+        filterDate =
+            savedState |> Maybe.map .filterDate |> Maybe.withDefault ""
+        
+        filterReleasedBy =
+            savedState |> Maybe.map .filterReleasedBy |> Maybe.withDefault ""
+        
+        filterReleasedFor =
+            savedState |> Maybe.map .filterReleasedFor |> Maybe.withDefault ""
+        
+        filterNotes =
+            savedState |> Maybe.map .filterNotes |> Maybe.withDefault ""
+        
+        filterStatus =
+            savedState |> Maybe.map .filterStatus |> Maybe.withDefault ""
+        
+        sortColumn =
+            Just SortDate
+        
+        sortDirection =
+            Descending
+    in
     ( { versionDetails = []
       , loading = True
       , error = Nothing
       , softwareList = shared.software
-      , compactView = True
-      , filterDate = ""
-      , filterReleasedBy = ""
-      , filterReleasedFor = ""
-      , filterNotes = ""
-      , filterStatus = ""
+      , compactView = compactView
+      , filterDate = filterDate
+      , filterReleasedBy = filterReleasedBy
+      , filterReleasedFor = filterReleasedFor
+      , filterNotes = filterNotes
+      , filterStatus = filterStatus
       , filterSoftwareVersions = Dict.empty
-      , sortColumn = Just SortDate
-      , sortDirection = Descending
+      , sortColumn = sortColumn
+      , sortDirection = sortDirection
+      , pendingNavigation = Nothing
       }
     , Effect.batch
         [ fetchVersions
@@ -133,15 +168,38 @@ type Msg
     | FilterSoftwareVersionChanged Int String
     | SortColumnClicked SortColumn
     | PrintRequested
+    | NavigateToVersion Int Int
+    | ScrollPositionSaved Float
+    | ScrollRestored (Result Browser.Dom.Error ())
 
 
 update : Shared.Model -> Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
 update shared req msg model =
     case msg of
         GotAllVersionDetails (Ok details) ->
+            let
+                scrollEffect =
+                    case shared.releaseHistoryState of
+                        Just state ->
+                            if state.scrollPosition > 0 then
+                                -- Use Browser.Dom.setViewport to scroll after the view renders
+                                Effect.fromCmd 
+                                    (Task.attempt ScrollRestored 
+                                        (Browser.Dom.setViewport 0 state.scrollPosition)
+                                    )
+                            else
+                                Effect.none
+                        
+                        Nothing ->
+                            Effect.none
+            in
             ( { model | versionDetails = details, loading = False }
-            , Effect.none
+            , scrollEffect
             )
+
+        ScrollRestored result ->
+            -- Scroll completed (or failed), nothing to do
+            ( model, Effect.none )
 
         GotAllVersionDetails (Err _) ->
             ( { model | loading = False, error = Just "Failed to load versions" }, Effect.none )
@@ -171,25 +229,53 @@ update shared req msg model =
             )
 
         ToggleCompactView ->
-            ( { model | compactView = not model.compactView }, Effect.none )
+            let
+                updatedModel =
+                    { model | compactView = not model.compactView }
+            in
+            ( updatedModel, saveState updatedModel )
 
         FilterDateChanged value ->
-            ( { model | filterDate = value }, Effect.none )
+            let
+                updatedModel =
+                    { model | filterDate = value }
+            in
+            ( updatedModel, saveState updatedModel )
 
         FilterReleasedByChanged value ->
-            ( { model | filterReleasedBy = value }, Effect.none )
+            let
+                updatedModel =
+                    { model | filterReleasedBy = value }
+            in
+            ( updatedModel, saveState updatedModel )
 
         FilterReleasedForChanged value ->
-            ( { model | filterReleasedFor = value }, Effect.none )
+            let
+                updatedModel =
+                    { model | filterReleasedFor = value }
+            in
+            ( updatedModel, saveState updatedModel )
 
         FilterNotesChanged value ->
-            ( { model | filterNotes = value }, Effect.none )
+            let
+                updatedModel =
+                    { model | filterNotes = value }
+            in
+            ( updatedModel, saveState updatedModel )
 
         FilterStatusChanged value ->
-            ( { model | filterStatus = value }, Effect.none )
+            let
+                updatedModel =
+                    { model | filterStatus = value }
+            in
+            ( updatedModel, saveState updatedModel )
 
         FilterSoftwareVersionChanged softwareId value ->
-            ( { model | filterSoftwareVersions = Dict.insert softwareId value model.filterSoftwareVersions }, Effect.none )
+            let
+                updatedModel =
+                    { model | filterSoftwareVersions = Dict.insert softwareId value model.filterSoftwareVersions }
+            in
+            ( updatedModel, saveState updatedModel )
 
         SortColumnClicked column ->
             let
@@ -214,6 +300,44 @@ update shared req msg model =
 
         PrintRequested ->
             ( model, Effect.fromShared Shared.PrintPage )
+
+        NavigateToVersion softwareId versionId ->
+            -- Get scroll position using Browser.Dom, then save and navigate
+            ( { model | pendingNavigation = Just versionId }
+            , Effect.fromCmd 
+                (Task.perform ScrollPositionSaved 
+                    (Task.map (\info -> info.viewport.y) Browser.Dom.getViewport)
+                )
+            )
+
+        ScrollPositionSaved scrollPos ->
+            -- After scroll position is saved, save state with scroll position and navigate
+            case model.pendingNavigation of
+                Just versionId ->
+                    let
+                        state =
+                            { compactView = model.compactView
+                            , filterDate = model.filterDate
+                            , filterReleasedBy = model.filterReleasedBy
+                            , filterReleasedFor = model.filterReleasedFor
+                            , filterNotes = model.filterNotes
+                            , filterStatus = model.filterStatus
+                            , scrollPosition = scrollPos
+                            }
+                    in
+                    ( { model | pendingNavigation = Nothing }
+                    , Effect.batch
+                        [ Effect.fromShared (Shared.SaveReleaseHistoryState state)
+                        , Effect.fromCmd 
+                            (Browser.Navigation.pushUrl 
+                                req.key 
+                                ("/versions/" ++ String.fromInt versionId ++ "?from=release-history")
+                            )
+                        ]
+                    )
+                
+                Nothing ->
+                    ( model, Effect.none )
 
 
 -- SUBSCRIPTIONS
@@ -298,7 +422,7 @@ viewContent shared model =
                             |> filterRows model softwareList
                             |> sortRows model softwareList
                 in
-                viewReleaseTable model softwareList rows
+                viewReleaseTable shared model softwareList rows
 
 
 buildReleaseInsightRows : List VersionDetail -> List ReleaseInsightRow
@@ -316,7 +440,7 @@ buildReleaseInsightRows versionDetails =
                               , releasedFor = ""
                               , notes = formatNotesWithSoftware detail.softwareName detail.notes
                               , releaseStatuses = [ detail.releaseStatus ]
-                              , softwareVersions = Dict.singleton detail.softwareId { version = detail.version, isFromCurrentDate = True }
+                              , softwareVersions = Dict.singleton detail.softwareId { version = detail.version, isFromCurrentDate = True, versionId = detail.id }
                               }
                             ]
 
@@ -330,7 +454,7 @@ buildReleaseInsightRows versionDetails =
                                     , releasedFor = customer.name
                                     , notes = formatNotesForCustomerWithSoftware detail.softwareName customer.id detail.notes
                                     , releaseStatuses = [ customerStageToReleaseStatus customer.releaseStage ]
-                                    , softwareVersions = Dict.singleton detail.softwareId { version = detail.version, isFromCurrentDate = True }
+                                    , softwareVersions = Dict.singleton detail.softwareId { version = detail.version, isFromCurrentDate = True, versionId = detail.id }
                                     }
                                 )
                                 detail.customers
@@ -481,10 +605,10 @@ combineSoftwareVersions dict1 dict2 =
         (\key val acc -> Dict.insert key val acc)
         (\key val1 val2 acc ->
             if val1.version == val2.version then
-                Dict.insert key { version = val1.version, isFromCurrentDate = val1.isFromCurrentDate || val2.isFromCurrentDate } acc
+                Dict.insert key { version = val1.version, isFromCurrentDate = val1.isFromCurrentDate || val2.isFromCurrentDate, versionId = val1.versionId } acc
 
             else
-                Dict.insert key { version = val1.version ++ " / " ++ val2.version, isFromCurrentDate = val1.isFromCurrentDate || val2.isFromCurrentDate } acc
+                Dict.insert key { version = val1.version ++ " / " ++ val2.version, isFromCurrentDate = val1.isFromCurrentDate || val2.isFromCurrentDate, versionId = val1.versionId } acc
         )
         (\key val acc -> Dict.insert key val acc)
         dict1
@@ -931,8 +1055,8 @@ filterInput value_ onChange =
         ]
 
 
-viewReleaseTable : Model -> List Software -> List ReleaseInsightRow -> Html Msg
-viewReleaseTable model softwareList rows =
+viewReleaseTable : Shared.Model -> Model -> List Software -> List ReleaseInsightRow -> Html Msg
+viewReleaseTable shared model softwareList rows =
     let
         columnCount =
             4 + List.length softwareList
@@ -979,14 +1103,18 @@ viewReleaseTable model softwareList rows =
                     ]
 
                  else
-                    List.map (viewReleaseRow softwareList) rows
+                    List.map (viewReleaseRow shared softwareList) rows
                 )
             ]
         ]
 
 
-viewReleaseRow : List Software -> ReleaseInsightRow -> Html Msg
-viewReleaseRow softwareList row =
+viewReleaseRow : Shared.Model -> List Software -> ReleaseInsightRow -> Html Msg
+viewReleaseRow shared softwareList row =
+    let
+        isLoggedIn =
+            shared.user /= Nothing
+    in
     tr []
         ([ td [] [ text row.releaseDate ]
          ]
@@ -995,7 +1123,7 @@ viewReleaseRow softwareList row =
                     let
                         versionInfo =
                             Dict.get sw.id row.softwareVersions
-                                |> Maybe.withDefault { version = "", isFromCurrentDate = False }
+                                |> Maybe.withDefault { version = "", isFromCurrentDate = False, versionId = 0 }
 
                         styles =
                             if versionInfo.isFromCurrentDate then
@@ -1003,10 +1131,22 @@ viewReleaseRow softwareList row =
 
                             else
                                 [ style "color" "#888", style "font-weight" "normal" ]
+
+                        isClickable =
+                            isLoggedIn && versionInfo.isFromCurrentDate && versionInfo.version /= "" && versionInfo.versionId > 0
                     in
                     td [ class "software-col" ]
-                        [ span styles
-                            [ text versionInfo.version ]
+                        [ if isClickable then
+                            span
+                                ([ onClick (NavigateToVersion sw.id versionInfo.versionId)
+                                , class "link"
+                                , style "cursor" "pointer"
+                                , style "text-decoration" "underline"
+                                ] ++ styles)
+                                [ text versionInfo.version ]
+
+                          else
+                            span styles [ text versionInfo.version ]
                         ]
                 )
                 softwareList
@@ -1042,3 +1182,22 @@ statusClass status =
 
         Canceled ->
             "status-canceled"
+
+
+-- HELPER FUNCTIONS
+
+
+saveState : Model -> Effect Msg
+saveState model =
+    let
+        state =
+            { compactView = model.compactView
+            , filterDate = model.filterDate
+            , filterReleasedBy = model.filterReleasedBy
+            , filterReleasedFor = model.filterReleasedFor
+            , filterNotes = model.filterNotes
+            , filterStatus = model.filterStatus
+            , scrollPosition = 0
+            }
+    in
+    Effect.fromShared (Shared.SaveReleaseHistoryState state)

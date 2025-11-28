@@ -2,6 +2,7 @@ module Shared exposing
     ( Flags
     , Model
     , Msg(..)
+    , ReleaseHistoryState
     , init
     , subscriptions
     , update
@@ -32,6 +33,18 @@ type alias Model =
     , countries : List Country
     , customers : List Customer
     , software : List Software
+    , releaseHistoryState : Maybe ReleaseHistoryState
+    }
+
+
+type alias ReleaseHistoryState =
+    { compactView : Bool
+    , filterDate : String
+    , filterReleasedBy : String
+    , filterReleasedFor : String
+    , filterNotes : String
+    , filterStatus : String
+    , scrollPosition : Float
     }
 
 
@@ -52,6 +65,7 @@ init _ flags =
       , countries = []
       , customers = []
       , software = []
+      , releaseHistoryState = Nothing
       }
     , case storage.token of
         Just token ->
@@ -79,6 +93,8 @@ type Msg
     | RefreshSoftware
     | StorageLoaded Decode.Value
     | PrintPage
+    | SaveReleaseHistoryState ReleaseHistoryState
+    | ClearReleaseHistoryState
 
 
 update : Request -> Msg -> Model -> ( Model, Cmd Msg )
@@ -163,6 +179,12 @@ update _ msg model =
 
         PrintPage ->
             ( model, Ports.printPage () )
+
+        SaveReleaseHistoryState state ->
+            ( { model | releaseHistoryState = Just state }, Cmd.none )
+
+        ClearReleaseHistoryState ->
+            ( { model | releaseHistoryState = Nothing }, Cmd.none )
 
 
 -- SUBSCRIPTIONS

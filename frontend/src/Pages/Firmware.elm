@@ -1,7 +1,7 @@
 module Pages.Firmware exposing (Model, Msg, page)
 
 import Api.Auth
-import Api.Data exposing (Country, CustomerReleaseStage(..), Software, SoftwareType(..), Version, VersionDetail, versionDecoder, versionDetailDecoder)
+import Api.Data exposing (Country, CustomerReleaseStage(..), Software, SoftwareType(..), VersionDetail, versionDetailDecoder)
 import Api.Endpoint as Endpoint
 import Dict exposing (Dict)
 import Effect exposing (Effect)
@@ -9,7 +9,7 @@ import Gen.Params.Firmware exposing (Params)
 import Gen.Route as Route
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, onInput, preventDefaultOn)
+import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as Decode
 import Layouts.Default
@@ -45,8 +45,7 @@ type SortDirection
 
 
 type alias Model =
-    { versions : List Version
-    , versionDetails : Dict Int VersionDetail
+    { versionDetails : List VersionDetail
     , loading : Bool
     , error : Maybe String
     , filterCountry : String
@@ -60,8 +59,7 @@ type alias Model =
 
 init : Shared.Model -> Request.With Params -> ( Model, Effect Msg )
 init shared req =
-    ( { versions = []
-      , versionDetails = Dict.empty
+    ( { versionDetails = []
       , loading = True
       , error = Nothing
       , filterCountry = ""
@@ -95,17 +93,8 @@ init shared req =
 fetchVersions : Effect Msg
 fetchVersions =
     Http.get
-        { url = Endpoint.versions []
-        , expect = Http.expectJson GotVersions (Decode.list versionDecoder)
-        }
-        |> Effect.fromCmd
-
-
-fetchVersionDetail : Int -> Effect Msg
-fetchVersionDetail versionId =
-    Http.get
-        { url = Endpoint.versions [ String.fromInt versionId ]
-        , expect = Http.expectJson (GotVersionDetail versionId) versionDetailDecoder
+        { url = Endpoint.versions [ "details" ]
+        , expect = Http.expectJson GotAllVersionDetails (Decode.list versionDetailDecoder)
         }
         |> Effect.fromCmd
 
@@ -114,8 +103,7 @@ fetchVersionDetail versionId =
 
 
 type Msg
-    = GotVersions (Result Http.Error (List Version))
-    | GotVersionDetail Int (Result Http.Error VersionDetail)
+    = GotAllVersionDetails (Result Http.Error (List VersionDetail))
     | NavigateToRoute Route.Route
     | NavigateToEpromHistory Int
     | LogoutRequested
@@ -130,42 +118,23 @@ type Msg
 update : Shared.Model -> Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
 update shared req msg model =
     case msg of
-        GotVersions (Ok versions) ->
+        GotAllVersionDetails (Ok details) ->
             let
                 firmwareSoftwareIds =
                     shared.software
                         |> List.filter (\s -> s.type_ == Firmware)
                         |> List.map .id
 
-                firmwareVersions =
-                    versions
+                firmwareVersionDetails =
+                    details
                         |> List.filter (\v -> List.member v.softwareId firmwareSoftwareIds)
-
-                versionIdsToFetch =
-                    firmwareVersions
-                        |> List.map .id
-                        |> List.filter (\id -> not (Dict.member id model.versionDetails))
             in
-            ( { model | versions = versions, loading = False }
-            , if List.isEmpty versionIdsToFetch then
-                Effect.none
-
-              else
-                versionIdsToFetch
-                    |> List.map fetchVersionDetail
-                    |> Effect.batch
-            )
-
-        GotVersions (Err _) ->
-            ( { model | loading = False, error = Just "Failed to load versions" }, Effect.none )
-
-        GotVersionDetail versionId (Ok detail) ->
-            ( { model | versionDetails = Dict.insert versionId detail model.versionDetails }
+            ( { model | versionDetails = firmwareVersionDetails, loading = False }
             , Effect.none
             )
 
-        GotVersionDetail _ (Err _) ->
-            ( model, Effect.none )
+        GotAllVersionDetails (Err _) ->
+            ( { model | loading = False, error = Just "Failed to load versions" }, Effect.none )
 
         NavigateToRoute route ->
             ( model, Effect.fromCmd (Request.pushRoute route req) )
@@ -260,7 +229,10 @@ view shared req model =
 viewContent : Shared.Model -> Model -> Html Msg
 viewContent shared model =
     if model.loading then
-        div [ class "loading" ] [ text "Loading firmware data..." ]
+        div [ class "loading" ]
+            [ div [ class "spinner" ] []
+            , div [] [ text "Loading firmware data..." ]
+            ]
 
     else
         case model.error of
@@ -423,35 +395,12 @@ viewCountryRowFromData firmwareSoftware row =
 
 findLatestVersionForCountry : Software -> Country -> List Int -> Model -> Maybe VersionDetail
 findLatestVersionForCountry software country countryCustomerIds model =
-    let
-        -- Get all versions for this software
-        softwareVersions =
-            model.versions
-                |> List.filter (\v -> v.softwareId == software.id)
-                |> List.sortBy .releaseDate
-                |> List.reverse
-
-        -- Check each version detail to see if it has customers from this country
-        findLatestInVersions versions =
-            case versions of
-                [] ->
-                    Nothing
-
-                version :: rest ->
-                    case Dict.get version.id model.versionDetails of
-                        Just detail ->
-                            -- Check if this version has any production-ready customers from this country
-                            if hasCountryProductionReadyCustomers detail countryCustomerIds then
-                                Just detail
-
-                            else
-                                findLatestInVersions rest
-
-                        Nothing ->
-                            -- Version detail not loaded yet, skip
-                            findLatestInVersions rest
-    in
-    findLatestInVersions softwareVersions
+    model.versionDetails
+        |> List.filter (\v -> v.softwareId == software.id)
+        |> List.sortBy .releaseDate
+        |> List.reverse
+        |> List.filter (\detail -> hasCountryProductionReadyCustomers detail countryCustomerIds)
+        |> List.head
 
 
 hasCountryProductionReadyCustomers : VersionDetail -> List Int -> Bool

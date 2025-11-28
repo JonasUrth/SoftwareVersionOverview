@@ -1,4 +1,4 @@
-port module Ports exposing (load, save, printPage)
+port module Ports exposing (load, save, printPage, saveScrollPosition, restoreScrollPosition, onScrollPositionSaved)
 
 import Json.Encode
 
@@ -10,4 +10,13 @@ port load : (Json.Encode.Value -> msg) -> Sub msg
 
 
 port printPage : () -> Cmd msg
+
+
+port saveScrollPosition : () -> Cmd msg
+
+
+port restoreScrollPosition : Float -> Cmd msg
+
+
+port onScrollPositionSaved : (Float -> msg) -> Sub msg
 

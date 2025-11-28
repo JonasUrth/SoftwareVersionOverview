@@ -45,6 +45,7 @@ type alias Model =
     , loadingVersion : Bool
     , releasePathStatus : ReleasePath.Status
     , releasePathRequest : Maybe ReleasePath.Request
+    , referrer : String
     }
 
 
@@ -53,6 +54,18 @@ init shared req =
     let
         versionId =
             String.toInt req.params.id |> Maybe.withDefault 0
+        
+        -- Parse the "from" query parameter to track where we came from
+        referrer =
+            case req.url.query of
+                Just queryStr ->
+                    if String.contains "from=release-history" queryStr then
+                        "release-history"
+                    else
+                        "versions"
+                
+                Nothing ->
+                    "versions"
     in
     ( { form =
             { version = ""
@@ -78,6 +91,7 @@ init shared req =
       , loadingVersion = False
       , releasePathStatus = ReleasePath.initialStatus
       , releasePathRequest = Nothing
+      , referrer = referrer
       }
     , case shared.user of
         Just _ ->
@@ -454,8 +468,15 @@ update req msg model =
             )
 
         VersionUpdated (Ok _) ->
+            let
+                route =
+                    if model.referrer == "release-history" then
+                        Route.ReleaseHistory
+                    else
+                        Route.Versions
+            in
             ( model
-            , Effect.fromCmd (Request.pushRoute Route.Versions req)
+            , Effect.fromCmd (Request.pushRoute route req)
             )
 
         VersionUpdated (Err _) ->
@@ -477,7 +498,14 @@ update req msg model =
                         ( { model | releasePathStatus = ReleasePath.Error "Failed to validate release file location.", releasePathRequest = Nothing }, Effect.none )
 
         GoBack ->
-            ( model, Effect.fromCmd (Request.pushRoute Route.Versions req) )
+            let
+                route =
+                    if model.referrer == "release-history" then
+                        Route.ReleaseHistory
+                    else
+                        Route.Versions
+            in
+            ( model, Effect.fromCmd (Request.pushRoute route req) )
 
         NavigateToRoute route ->
             ( model, Effect.fromCmd (Request.pushRoute route req) )
