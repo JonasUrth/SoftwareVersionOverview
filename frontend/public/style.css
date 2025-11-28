@@ -53,7 +53,7 @@ body {
 .container {
     /* max-width: 1200px; */
     margin: 0 auto;
-    padding: 2rem;
+    padding: 1rem 2rem;
 }
 
 .full-width-content {
@@ -219,11 +219,22 @@ table {
 }
 
 thead {
-    background: #ecf0f1;
+    background: #e8f5e0;
+}
+
+/* Ensure sticky header cells keep the background color */
+thead th[style*="position: sticky"],
+thead th[style*="position:sticky"] {
+    background: #ddf5ce !important;
+    min-height: 4rem;
+}
+
+.full-width-content tbody {
+    font-size: small;
 }
 
 th, td {
-    padding: 1rem;
+    padding: 6px 8px;
     text-align: left;
     border-bottom: 1px solid #ddd;
 }
@@ -233,8 +244,17 @@ th {
     color: #2c3e50;
 }
 
-tr:hover {
-    background: #f8f9fa;
+/* Alternating row colors - very light green based on company color #71bf44 */
+tbody tr:nth-child(even) {
+    background-color: #f4faf0;
+}
+
+tbody tr:nth-child(odd) {
+    background-color: white;
+}
+
+tbody tr:hover {
+    background: #e8f5e0 !important;
 }
 
 td.actions {
@@ -265,7 +285,7 @@ tr.inactive td {
 
 .release-insight-table th.notes-col,
 .release-insight-table td.notes-col {
-    min-width: 500px;
+    min-width: 100px;
     max-width: none;
 }
 
@@ -275,14 +295,13 @@ tr.inactive td {
 }
 
 .release-insight-table tr.filter-row th {
-    padding: 4px;
+    padding: 8px;
     border-bottom: 1px solid #ddd;
 }
 
 .release-insight-table .filter-cell {
     display: flex;
     align-items: center;
-    gap: 6px;
 }
 
 .release-insight-table .filter-cell input {
@@ -721,7 +740,7 @@ nav a:hover {
 }
 
 .firmware-table .filter-row {
-    background-color: #f8f9fa;
+    background-color: #e8f5e0;
 }
 
 .firmware-table .filter-row th {

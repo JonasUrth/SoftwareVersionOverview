@@ -1061,36 +1061,36 @@ viewReleaseTable shared model softwareList rows =
         columnCount =
             4 + List.length softwareList
     in
-    div [ class "table-container table-container-fullwidth", style "overflow-x" "auto" ]
+    div [ class "table-container table-container-fullwidth", style "overflow-x" "auto", style "overflow-y" "auto", style "max-height" "calc(100vh - 125px)" ]
         [ table [ class "release-insight-table" ]
             [ thead []
                 [ tr []
-                    ([ viewSortableHeader model SortDate "Release Date" []
+                    ([ viewSortableHeader model SortDate "Release Date" [ style "position" "sticky", style "top" "0", style "z-index" "2" ]
                      ]
                         ++ List.map
                             (\sw ->
-                                viewSortableHeader model (SortSoftware sw.id) sw.name [ class "software-col" ]
+                                viewSortableHeader model (SortSoftware sw.id) sw.name [ class "software-col", style "position" "sticky", style "top" "0", style "z-index" "2" ]
                             )
                             softwareList
-                        ++ [ viewSortableHeader model SortReleasedBy "Released By" []
-                           , viewSortableHeader model SortReleasedFor "Released For" []
-                           , viewSortableHeader model SortNotes "Notes" [ class "notes-col" ]
-                           , viewSortableHeader model SortStatus "Release Status" []
+                        ++ [ viewSortableHeader model SortReleasedBy "Released By" [ style "position" "sticky", style "top" "0", style "z-index" "2" ]
+                           , viewSortableHeader model SortReleasedFor "Released For" [ style "position" "sticky", style "top" "0", style "z-index" "2" ]
+                           , viewSortableHeader model SortNotes "Notes" [ class "notes-col", style "position" "sticky", style "top" "0", style "z-index" "2" ]
+                           , viewSortableHeader model SortStatus "Release Status" [ style "position" "sticky", style "top" "0", style "z-index" "2" ]
                            ]
                     )
                 , tr [ class "filter-row" ]
-                    ([ viewFilterInputCell model SortDate [] (filterInput model.filterDate FilterDateChanged)
+                    ([ viewFilterInputCell model SortDate [ style "position" "sticky", style "top" "3.5rem", style "z-index" "2" ] (filterInput model.filterDate FilterDateChanged)
                      ]
                         ++ List.map
                             (\sw ->
-                                viewFilterInputCell model (SortSoftware sw.id) [ class "software-col" ]
+                                viewFilterInputCell model (SortSoftware sw.id) [ class "software-col", style "position" "sticky", style "top" "3.5rem", style "z-index" "2" ]
                                     (filterInput (Dict.get sw.id model.filterSoftwareVersions |> Maybe.withDefault "") (FilterSoftwareVersionChanged sw.id))
                             )
                             softwareList
-                        ++ [ viewFilterInputCell model SortReleasedBy [] (filterInput model.filterReleasedBy FilterReleasedByChanged)
-                           , viewFilterInputCell model SortReleasedFor [] (filterInput model.filterReleasedFor FilterReleasedForChanged)
-                           , viewFilterInputCell model SortNotes [ class "notes-col" ] (filterInput model.filterNotes FilterNotesChanged)
-                           , viewFilterInputCell model SortStatus [] (filterInput model.filterStatus FilterStatusChanged)
+                        ++ [ viewFilterInputCell model SortReleasedBy [ style "position" "sticky", style "top" "3.5rem", style "z-index" "2" ] (filterInput model.filterReleasedBy FilterReleasedByChanged)
+                           , viewFilterInputCell model SortReleasedFor [ style "position" "sticky", style "top" "3.5rem", style "z-index" "2" ] (filterInput model.filterReleasedFor FilterReleasedForChanged)
+                           , viewFilterInputCell model SortNotes [ class "notes-col", style "position" "sticky", style "top" "3.5rem", style "z-index" "2" ] (filterInput model.filterNotes FilterNotesChanged)
+                           , viewFilterInputCell model SortStatus [ style "position" "sticky", style "top" "3.5rem", style "z-index" "2" ] (filterInput model.filterStatus FilterStatusChanged)
                            ]
                     )
                 ]

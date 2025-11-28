@@ -348,24 +348,24 @@ viewContent model =
                     |> filterVersions model
                     |> sortVersions model
         in
-        div [ class "table-container" ]
+        div [ class "table-container", style "overflow-y" "auto", style "max-height" "calc(100vh - 115px)" ]
             [ table [ class "versions-table" ]
                 [ thead []
                     [ tr []
-                        [ viewSortableHeader model SortSoftware "Software" []
-                        , viewSortableHeader model SortVersion "Version" []
-                        , viewSortableHeader model SortStatus "Status" []
-                        , viewSortableHeader model SortReleasedBy "Released By" []
-                        , viewSortableHeader model SortReleaseDate "Release Date" []
-                        , viewSortableHeader model SortCustomers "Customers" []
+                        [ viewSortableHeader model SortSoftware "Software" [ style "position" "sticky", style "top" "0", style "z-index" "2" ]
+                        , viewSortableHeader model SortVersion "Version" [ style "position" "sticky", style "top" "0", style "z-index" "2" ]
+                        , viewSortableHeader model SortStatus "Status" [ style "position" "sticky", style "top" "0", style "z-index" "2" ]
+                        , viewSortableHeader model SortReleasedBy "Released By" [ style "position" "sticky", style "top" "0", style "z-index" "2" ]
+                        , viewSortableHeader model SortReleaseDate "Release Date" [ style "position" "sticky", style "top" "0", style "z-index" "2" ]
+                        , viewSortableHeader model SortCustomers "Customers" [ style "position" "sticky", style "top" "0", style "z-index" "2" ]
                         ]
                     , tr [ class "filter-row" ]
-                        [ viewFilterInputCell model SortSoftware [] (filterInput model.filterSoftware FilterSoftwareChanged)
-                        , viewFilterInputCell model SortVersion [] (filterInput model.filterVersion FilterVersionChanged)
-                        , viewFilterInputCell model SortStatus [] (filterInput model.filterStatus FilterStatusChanged)
-                        , viewFilterInputCell model SortReleasedBy [] (filterInput model.filterReleasedBy FilterReleasedByChanged)
-                        , viewFilterInputCell model SortReleaseDate [] (filterInput model.filterReleaseDate FilterReleaseDateChanged)
-                        , viewFilterInputCell model SortCustomers [] (filterInput model.filterCustomers FilterCustomersChanged)
+                        [ viewFilterInputCell model SortSoftware [ style "position" "sticky", style "top" "2rem", style "z-index" "2" ] (filterInput model.filterSoftware FilterSoftwareChanged)
+                        , viewFilterInputCell model SortVersion [ style "position" "sticky", style "top" "2rem", style "z-index" "2" ] (filterInput model.filterVersion FilterVersionChanged)
+                        , viewFilterInputCell model SortStatus [ style "position" "sticky", style "top" "2rem", style "z-index" "2" ] (filterInput model.filterStatus FilterStatusChanged)
+                        , viewFilterInputCell model SortReleasedBy [ style "position" "sticky", style "top" "2rem", style "z-index" "2" ] (filterInput model.filterReleasedBy FilterReleasedByChanged)
+                        , viewFilterInputCell model SortReleaseDate [ style "position" "sticky", style "top" "2rem", style "z-index" "2" ] (filterInput model.filterReleaseDate FilterReleaseDateChanged)
+                        , viewFilterInputCell model SortCustomers [ style "position" "sticky", style "top" "2rem", style "z-index" "2" ] (filterInput model.filterCustomers FilterCustomersChanged)
                         ]
                     ]
                 , tbody []

@@ -273,28 +273,28 @@ viewContent shared model =
                                 |> filterCountryRows model firmwareSoftware
                                 |> sortCountryRows model firmwareSoftware
                     in
-                    div [ class "table-container" ]
+                    div [ class "table-container", style "overflow-y" "auto", style "max-height" "calc(100vh - 125px)" ]
                         [ table [ class "firmware-table" ]
                             [ thead []
-                                [ tr []
-                                    ([ viewSortableHeader model SortCountry "Country" [] ]
-                                        ++ List.map (\sw -> viewSortableHeader model (SortSoftware sw.id) sw.name []) firmwareSoftware
-                                        ++ [ viewSortableHeader model SortReleasedBy "Released By" []
-                                           , viewSortableHeader model SortNotes "Notes" []
-                                           , th [] [ text "Actions" ]
+                                [ tr [style "height" "4rem"]
+                                    ([ viewSortableHeader model SortCountry "Country" [ style "position" "sticky", style "top" "0", style "z-index" "2" ] ]
+                                        ++ List.map (\sw -> viewSortableHeader model (SortSoftware sw.id) sw.name [ style "position" "sticky", style "top" "0", style "z-index" "2" ]) firmwareSoftware
+                                        ++ [ viewSortableHeader model SortReleasedBy "Released By" [ style "position" "sticky", style "top" "0", style "z-index" "2" ]
+                                           , viewSortableHeader model SortNotes "Notes" [ style "position" "sticky", style "top" "0", style "z-index" "2" ]
+                                           , th [ style "position" "sticky", style "top" "0", style "z-index" "2" ] [ text "Actions" ]
                                            ]
                                     )
                                 , tr [ class "filter-row" ]
-                                    ([ viewFilterInputCell model SortCountry [] (filterInput model.filterCountry FilterCountryChanged) ]
+                                    ([ viewFilterInputCell model SortCountry [ style "position" "sticky", style "top" "3.5rem", style "z-index" "2" ] (filterInput model.filterCountry FilterCountryChanged) ]
                                         ++ List.map
                                             (\sw ->
-                                                viewFilterInputCell model (SortSoftware sw.id) []
+                                                viewFilterInputCell model (SortSoftware sw.id) [ style "position" "sticky", style "top" "3.5rem", style "z-index" "2" ]
                                                     (filterInput (Dict.get sw.id model.filterSoftwareVersions |> Maybe.withDefault "") (FilterSoftwareVersionChanged sw.id))
                                             )
                                             firmwareSoftware
-                                        ++ [ viewFilterInputCell model SortReleasedBy [] (filterInput model.filterReleasedBy FilterReleasedByChanged)
-                                           , viewFilterInputCell model SortNotes [] (filterInput model.filterNotes FilterNotesChanged)
-                                           , th [] []
+                                        ++ [ viewFilterInputCell model SortReleasedBy [ style "position" "sticky", style "top" "3.5rem", style "z-index" "2" ] (filterInput model.filterReleasedBy FilterReleasedByChanged)
+                                           , viewFilterInputCell model SortNotes [ style "position" "sticky", style "top" "3.5rem", style "z-index" "2" ] (filterInput model.filterNotes FilterNotesChanged)
+                                           , th [ style "position" "sticky", style "top" "3.5rem", style "z-index" "2" ] []
                                            ]
                                     )
                                 ]
