@@ -19,6 +19,7 @@ import Page
 import Request
 import Shared
 import Task
+import Utils.NoteFormatter
 import View exposing (View)
 
 
@@ -1152,7 +1153,7 @@ viewReleaseRow shared softwareList row =
                 softwareList
             ++ [ td [] [ text row.releasedBy ]
                , td [] [ text row.releasedFor ]
-               , td [ class "notes-col", style "white-space" "pre-wrap" ] [ text row.notes ]
+               , td [ class "notes-col", style "white-space" "pre-wrap" ] [ Utils.NoteFormatter.formatNote row.notes ]
                , td []
                     (List.map
                         (\status ->

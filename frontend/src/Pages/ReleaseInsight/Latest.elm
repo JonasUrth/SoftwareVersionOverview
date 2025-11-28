@@ -29,6 +29,7 @@ import Layouts.Default
 import Page
 import Request
 import Shared
+import Utils.NoteFormatter
 import View exposing (View)
 
 
@@ -549,7 +550,7 @@ viewCustomerNotes detail customerId =
 viewNoteItem : NoteDetail -> Html Msg
 viewNoteItem note =
     div [ class "note-item" ]
-        [ p [ class "note-text" ] [ text note.note ]
+        [ div [ class "note-text" ] [ Utils.NoteFormatter.formatNote note.note ]
         ]
 
 

@@ -6,9 +6,9 @@ module Versions.ReleasePath exposing
     , view
     )
 
-import Api.Data exposing (ReleasePathCheckResponse, ReleaseStatus(..))
-import Html exposing (Html, div, text)
-import Html.Attributes exposing (class)
+import Api.Data exposing (Customer, ReleasePathCheckResponse, ReleaseStatus(..), Software, SoftwareType(..))
+import Html exposing (Html, div, strong, text)
+import Html.Attributes exposing (class, style)
 import String
 
 
@@ -53,8 +53,8 @@ evaluate releaseStatus softwareId version customerIds =
         )
 
 
-view : Status -> Html msg
-view status =
+view : Status -> Maybe Software -> List Customer -> List Int -> Html msg
+view status maybeSoftware allCustomers selectedCustomerIds =
     case status of
         NotRequired ->
             text ""
@@ -77,7 +77,7 @@ view status =
 
                 successView =
                     if response.isValid && List.isEmpty response.errors then
-                        [ div [ class "success" ] [ text "Release files validated." ] ]
+                        [ viewSuccessMessage maybeSoftware allCustomers selectedCustomerIds ]
 
                     else
                         []
@@ -92,5 +92,76 @@ view status =
 
         Error message ->
             div [ class "warning" ] [ text message ]
+
+
+viewSuccessMessage : Maybe Software -> List Customer -> List Int -> Html msg
+viewSuccessMessage maybeSoftware allCustomers selectedCustomerIds =
+    let
+        selectedCustomers =
+            allCustomers
+                |> List.filter (\c -> List.member c.id selectedCustomerIds)
+                |> List.sortBy .name
+        
+        isFirmware =
+            case maybeSoftware of
+                Just software ->
+                    software.type_ == Firmware
+                
+                Nothing ->
+                    False
+        
+        isWindows =
+            case maybeSoftware of
+                Just software ->
+                    software.type_ == Windows
+                
+                Nothing ->
+                    False
+    in
+    div [ class "success" ]
+        [ text "Release files validated."
+        , if isFirmware then
+            viewCountryList selectedCustomers
+          else if isWindows then
+            viewCustomerList selectedCustomers
+          else
+            text ""
+        ]
+
+
+viewCountryList : List Customer -> Html msg
+viewCountryList customers =
+    let
+        countries =
+            customers
+                |> List.map (\c -> c.country.name)
+                |> List.foldr
+                    (\countryName acc ->
+                        if List.member countryName acc then
+                            acc
+                        else
+                            countryName :: acc
+                    )
+                    []
+                |> List.sort
+    in
+    if List.isEmpty countries then
+        text ""
+    else
+        div [ style "margin-top" "0.5rem" ]
+            [ strong [] [ text "Countries: " ]
+            , text (String.join ", " countries)
+            ]
+
+
+viewCustomerList : List Customer -> Html msg
+viewCustomerList customers =
+    if List.isEmpty customers then
+        text ""
+    else
+        div [ style "margin-top" "0.5rem" ]
+            [ strong [] [ text "Customers: " ]
+            , text (String.join ", " (List.map .name customers))
+            ]
 
 

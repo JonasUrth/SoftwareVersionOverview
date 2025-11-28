@@ -15,6 +15,7 @@ import Layouts.Default
 import Page
 import Request
 import Shared
+import Utils.NoteFormatter
 import View exposing (View)
 import String
 
@@ -290,6 +291,12 @@ viewVersionRow model countryCustomerIds version =
             maybeDetail
                 |> Maybe.andThen (\detail -> notesForCountry detail countryCustomerIds)
                 |> Maybe.withDefault ""
+        
+        notesHtml =
+            if String.isEmpty notesText then
+                text ""
+            else
+                Utils.NoteFormatter.formatNote notesText
     in
     tr []
         [ td [] [ text version.softwareName ]
@@ -300,7 +307,7 @@ viewVersionRow model countryCustomerIds version =
             [ span [ class ("badge " ++ statusClass version.releaseStatus) ]
                 [ text (Api.Data.releaseStatusLabel version.releaseStatus) ]
             ]
-        , td [] [ text notesText ]
+        , td [] [ notesHtml ]
         ]
 
 

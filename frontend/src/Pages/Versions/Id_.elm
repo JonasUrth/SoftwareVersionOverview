@@ -135,6 +135,8 @@ type Msg
     | ToggleNoteCustomer Int Int
     | AddNote
     | RemoveNote Int
+    | InsertBulletPoint Int
+    | InsertBoldText Int
     | FormSubmitted
     | VersionUpdated (Result Http.Error String)
     | VersionDetailFetched (Result Http.Error VersionDetail)
@@ -433,6 +435,54 @@ update req msg model =
             in
             ( { model | form = { form | notes = List.take index form.notes ++ List.drop (index + 1) form.notes } }, Effect.none )
 
+        InsertBulletPoint index ->
+            let
+                form = model.form
+                updateNote i note =
+                    if i == index then
+                        let
+                            currentText = note.note
+                            lines = String.split "\n" currentText
+                            
+                            -- Add bullet to each non-empty line that doesn't already have one
+                            processedLines =
+                                List.map
+                                    (\line ->
+                                        let
+                                            trimmed = String.trim line
+                                        in
+                                        if String.isEmpty trimmed then
+                                            line
+                                        else if String.startsWith "•" trimmed || String.startsWith "• " trimmed then
+                                            line
+                                        else
+                                            "• " ++ trimmed
+                                    )
+                                    lines
+                            
+                            newText =
+                                if String.isEmpty currentText then
+                                    "• "
+                                else
+                                    String.join "\n" processedLines
+                        in
+                        { note | note = newText }
+                    else
+                        note
+            in
+            ( { model | form = { form | notes = List.indexedMap updateNote form.notes } }, Effect.none )
+
+        InsertBoldText index ->
+            let
+                form = model.form
+                updateNote i note =
+                    if i == index then
+                        { note | note = note.note ++ "**text**" }
+                    else
+                        note
+            in
+            ( { model | form = { form | notes = List.indexedMap updateNote form.notes } }, Effect.none )
+
         FormSubmitted ->
             let
                 releaseDateTime =
@@ -587,7 +637,7 @@ viewBody shared model =
             , viewCustomerSelection shared model hasSoftware individualEnabled
             , viewCustomerStages shared model hasSoftware individualEnabled
             , viewNotes shared model hasSoftware
-            , viewReleaseValidationSection model
+            , viewReleaseValidationSection shared model
             , div [ class "form-actions" ]
                 [ button [ type_ "button", class "btn-secondary", onClick GoBack ] [ text "Cancel" ]
                 , button [ type_ "submit", class "btn-primary", disabled (model.loading || not hasSoftware) ]
@@ -1028,15 +1078,37 @@ viewNoteForm shared enabled model index note =
     div [ class "note-form" ]
         [ div [ class "form-group" ]
             [ label [] [ text ("Note " ++ String.fromInt (index + 1)) ]
+            , div [ class "formatting-toolbar", style "margin-bottom" "0.5rem" ]
+                [ button
+                    [ type_ "button"
+                    , class "btn-small"
+                    , onClick (InsertBoldText index)
+                    , disabled (not enabled)
+                    , title "Insert bold text (**text**)"
+                    , style "margin-right" "0.5rem"
+                    ]
+                    [ text "B" ]
+                , button
+                    [ type_ "button"
+                    , class "btn-small"
+                    , onClick (InsertBulletPoint index)
+                    , disabled (not enabled)
+                    , title "Add bullet points to all lines"
+                    , style "margin-right" "0.5rem"
+                    ]
+                    [ text "•" ]
+                ]
             , textarea
                 [ value note.note
                 , onInput (NoteChanged index)
-                , placeholder "Release note..."
-                , rows 3
+                , placeholder "Release note... (Use **text** for bold, • for bullet points)"
+                , rows 5
                 , required True
                 , disabled (not enabled)
                 ]
                 []
+            , p [ class "help-text", style "font-size" "0.85rem", style "margin-top" "0.25rem" ]
+                [ text "Formatting: **bold text** for bold. Click • button to add bullets to all lines." ]
             ]
         , div [ class "form-group" ]
             [ label [] [ text "Assign to customers:" ]
@@ -1277,17 +1349,20 @@ defaultStageForStatus status =
             CustomerCanceled
 
 
-viewReleaseValidationSection : Model -> Html Msg
-viewReleaseValidationSection model =
+viewReleaseValidationSection : Shared.Model -> Model -> Html Msg
+viewReleaseValidationSection shared model =
     let
         canRefresh =
             model.form.softwareId > 0
                 && (not (String.isEmpty (String.trim model.form.version)))
                 && model.form.releaseStatus == ProductionReady
+        
+        maybeSoftware =
+            selectedSoftware shared model.form
     in
     div [ class "release-validation" ]
         [ viewError model.error
-        , ReleasePath.view model.releasePathStatus
+        , ReleasePath.view model.releasePathStatus maybeSoftware shared.customers model.form.selectedCustomers
         , button
             [ type_ "button"
             , class "btn-secondary btn-small"

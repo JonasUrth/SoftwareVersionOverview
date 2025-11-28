@@ -799,6 +799,33 @@ nav a:hover {
     margin-bottom: 0.75rem;
 }
 
+/* Formatting Toolbar */
+.formatting-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.formatting-toolbar button {
+    padding: 0.4rem 0.8rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border: 1px solid #ddd;
+    background: white;
+    min-width: 36px;
+}
+
+.formatting-toolbar button:hover:not(:disabled) {
+    background: #e8f4fd;
+    border-color: #3498db;
+    color: #3498db;
+}
+
+.formatting-toolbar button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
 .help-text {
     color: #7f8c8d;
     font-size: 0.9rem;
