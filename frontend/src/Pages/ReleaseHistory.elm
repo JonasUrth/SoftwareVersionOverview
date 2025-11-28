@@ -268,7 +268,10 @@ view shared req model =
 viewContent : Shared.Model -> Model -> Html Msg
 viewContent shared model =
     if model.loading then
-        div [ class "loading" ] [ text "Loading releases..." ]
+        div [ class "loading" ]
+            [ div [ class "spinner" ] []
+            , div [] [ text "Loading releases..." ]
+            ]
 
     else
         case model.error of
@@ -564,49 +567,93 @@ fillMissingVersions softwareList rows =
         sortedRows =
             List.sortBy .releaseDateRaw rows
 
-        fillRowForCustomer : String -> List ReleaseInsightRow -> ReleaseInsightRow -> ReleaseInsightRow
-        fillRowForCustomer customerName previousRows currentRow =
+        -- Build a lookup table: (customerName, softwareId) -> VersionInfo
+        -- This is done once instead of searching for each row
+        buildLookup : List ReleaseInsightRow -> Dict String (Dict Int VersionInfo)
+        buildLookup rowsList =
+            List.foldl
+                (\row customerLookup ->
+                    Dict.update row.releasedFor
+                        (\maybeSwVersions ->
+                            let
+                                swVersions =
+                                    Maybe.withDefault Dict.empty maybeSwVersions
+                                
+                                -- Update with versions from this row
+                                updatedVersions =
+                                    Dict.foldl
+                                        (\swId vInfo acc ->
+                                            Dict.insert swId vInfo acc
+                                        )
+                                        swVersions
+                                        row.softwareVersions
+                            in
+                            Just updatedVersions
+                        )
+                        customerLookup
+                )
+                Dict.empty
+                rowsList
+
+        fillRow : Dict String (Dict Int VersionInfo) -> ReleaseInsightRow -> ReleaseInsightRow
+        fillRow lookupTable row =
             let
-                customerRows =
-                    previousRows
-                        |> List.filter (\r -> r.releasedFor == customerName)
-
-                fillVersion : Int -> VersionInfo
-                fillVersion softwareId =
-                    case Dict.get softwareId currentRow.softwareVersions of
-                        Just info ->
-                            info
-
-                        Nothing ->
-                            -- Find newest earlier version for this customer/software
-                            customerRows
-                                |> List.reverse
-                                |> List.filterMap
-                                    (\prevRow ->
-                                        Dict.get softwareId prevRow.softwareVersions
-                                    )
-                                |> List.head
-                                |> Maybe.map (\info -> { info | isFromCurrentDate = False })
-                                |> Maybe.withDefault { version = "", isFromCurrentDate = False }
-            in
-            { currentRow
-                | softwareVersions =
+                customerVersions =
+                    Dict.get row.releasedFor lookupTable
+                        |> Maybe.withDefault Dict.empty
+                
+                filledVersions =
                     softwareList
-                        |> List.map (\sw -> ( sw.id, fillVersion sw.id ))
-                        |> List.filter (\( _, info ) -> info.version /= "")
-                        |> Dict.fromList
-                        |> Dict.union currentRow.softwareVersions
-            }
+                        |> List.foldl
+                            (\sw acc ->
+                                case Dict.get sw.id row.softwareVersions of
+                                    Just _ ->
+                                        -- Already has this software version, keep it
+                                        acc
+                                    
+                                    Nothing ->
+                                        -- Fill from lookup table
+                                        case Dict.get sw.id customerVersions of
+                                            Just vInfo ->
+                                                Dict.insert sw.id { vInfo | isFromCurrentDate = False } acc
+                                            
+                                            Nothing ->
+                                                acc
+                            )
+                            row.softwareVersions
+            in
+            { row | softwareVersions = filledVersions }
+        
+        -- Process rows in order, building up the lookup table as we go
+        processRows : List ReleaseInsightRow -> Dict String (Dict Int VersionInfo) -> List ReleaseInsightRow -> List ReleaseInsightRow
+        processRows remaining lookupTable accumulated =
+            case remaining of
+                [] ->
+                    List.reverse accumulated
+                
+                currentRow :: rest ->
+                    let
+                        filledRow =
+                            fillRow lookupTable currentRow
+                        
+                        -- Update lookup table with this row's versions
+                        updatedLookup =
+                            Dict.update currentRow.releasedFor
+                                (\maybeSwVersions ->
+                                    let
+                                        swVersions =
+                                            Maybe.withDefault Dict.empty maybeSwVersions
+                                        
+                                        updatedVersions =
+                                            Dict.union filledRow.softwareVersions swVersions
+                                    in
+                                    Just updatedVersions
+                                )
+                                lookupTable
+                    in
+                    processRows rest updatedLookup (filledRow :: accumulated)
     in
-    sortedRows
-        |> List.indexedMap
-            (\index row ->
-                let
-                    previousRows =
-                        List.take index sortedRows
-                in
-                fillRowForCustomer row.releasedFor previousRows row
-            )
+    processRows sortedRows Dict.empty []
 
 
 sortRows : Model -> List Software -> List ReleaseInsightRow -> List ReleaseInsightRow
@@ -700,50 +747,75 @@ sortRows model softwareList rows =
 
 filterRows : Model -> List Software -> List ReleaseInsightRow -> List ReleaseInsightRow
 filterRows model softwareList rows =
+    let
+        -- Precompute lowercase filter values once
+        filterDateLower =
+            String.toLower model.filterDate
+
+        filterReleasedByLower =
+            String.toLower model.filterReleasedBy
+
+        filterReleasedForLower =
+            String.toLower model.filterReleasedFor
+
+        filterNotesLower =
+            String.toLower model.filterNotes
+
+        filterStatusLower =
+            String.toLower model.filterStatus
+
+        -- Precompute software filter values
+        softwareFilters =
+            softwareList
+                |> List.map
+                    (\sw ->
+                        ( sw.id
+                        , Dict.get sw.id model.filterSoftwareVersions
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                    )
+                |> List.filter (\( _, filter ) -> filter /= "")
+    in
     rows
         |> List.filter
             (\row ->
                 let
                     dateMatch =
                         String.isEmpty model.filterDate
-                            || String.contains (String.toLower model.filterDate) (String.toLower row.releaseDate)
+                            || String.contains filterDateLower (String.toLower row.releaseDate)
 
                     releasedByMatch =
                         String.isEmpty model.filterReleasedBy
-                            || String.contains (String.toLower model.filterReleasedBy) (String.toLower row.releasedBy)
+                            || String.contains filterReleasedByLower (String.toLower row.releasedBy)
 
                     releasedForMatch =
                         String.isEmpty model.filterReleasedFor
-                            || String.contains (String.toLower model.filterReleasedFor) (String.toLower row.releasedFor)
+                            || String.contains filterReleasedForLower (String.toLower row.releasedFor)
 
                     notesMatch =
                         String.isEmpty model.filterNotes
-                            || String.contains (String.toLower model.filterNotes) (String.toLower row.notes)
+                            || String.contains filterNotesLower (String.toLower row.notes)
 
                     statusMatch =
                         String.isEmpty model.filterStatus
                             || List.any
                                 (\status ->
-                                    String.contains (String.toLower model.filterStatus) (String.toLower (releaseStatusLabel status))
+                                    String.contains filterStatusLower (String.toLower (releaseStatusLabel status))
                                 )
                                 row.releaseStatuses
 
                     softwareVersionsMatch =
-                        softwareList
-                            |> List.all
-                                (\sw ->
-                                    let
-                                        filterValue =
-                                            Dict.get sw.id model.filterSoftwareVersions
-                                                |> Maybe.withDefault ""
+                        List.all
+                            (\( swId, filterValue ) ->
+                                case Dict.get swId row.softwareVersions of
+                                    Just versionInfo ->
+                                        String.contains filterValue (String.toLower versionInfo.version)
 
-                                        versionInfo =
-                                            Dict.get sw.id row.softwareVersions
-                                                |> Maybe.withDefault { version = "", isFromCurrentDate = False }
-                                    in
-                                    String.isEmpty filterValue
-                                        || String.contains (String.toLower filterValue) (String.toLower versionInfo.version)
-                                )
+                                    Nothing ->
+                                        False
+                            )
+                            softwareFilters
                 in
                 dateMatch && releasedByMatch && releasedForMatch && notesMatch && statusMatch && softwareVersionsMatch
             )
