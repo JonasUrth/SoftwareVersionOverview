@@ -1,7 +1,7 @@
 module Pages.ReleaseHistory exposing (Model, Msg, page)
 
 import Api.Auth
-import Api.Data exposing (CustomerDetail, CustomerReleaseStage(..), NoteDetail, ReleaseStatus(..), Software, Version, VersionDetail, releaseStatusFromString, releaseStatusLabel, releaseStatusToString, versionDecoder, versionDetailDecoder)
+import Api.Data exposing (CustomerReleaseStage(..), NoteDetail, ReleaseStatus(..), Software, VersionDetail, releaseStatusFromString, releaseStatusLabel, releaseStatusToString, versionDetailDecoder)
 import Api.Endpoint as Endpoint
 import Dict exposing (Dict)
 import Effect exposing (Effect)
@@ -9,10 +9,9 @@ import Gen.Params.ReleaseHistory exposing (Params)
 import Gen.Route as Route
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, onInput, preventDefaultOn)
+import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as Decode
-import Json.Encode as Encode
 import Layouts.Default
 import Page
 import Request
@@ -65,8 +64,7 @@ type SortDirection
 
 
 type alias Model =
-    { versions : List Version
-    , versionDetails : Dict Int VersionDetail
+    { versionDetails : List VersionDetail
     , loading : Bool
     , error : Maybe String
     , softwareList : List Software
@@ -84,8 +82,7 @@ type alias Model =
 
 init : Shared.Model -> Request.With Params -> ( Model, Effect Msg )
 init shared req =
-    ( { versions = []
-      , versionDetails = Dict.empty
+    ( { versionDetails = []
       , loading = True
       , error = Nothing
       , softwareList = shared.software
@@ -113,17 +110,8 @@ init shared req =
 fetchVersions : Effect Msg
 fetchVersions =
     Http.get
-        { url = Endpoint.versions []
-        , expect = Http.expectJson GotVersions (Decode.list versionDecoder)
-        }
-        |> Effect.fromCmd
-
-
-fetchVersionDetail : Int -> Effect Msg
-fetchVersionDetail versionId =
-    Http.get
-        { url = Endpoint.versions [ String.fromInt versionId ]
-        , expect = Http.expectJson (GotVersionDetail versionId) versionDetailDecoder
+        { url = Endpoint.versions [ "details" ]
+        , expect = Http.expectJson GotAllVersionDetails (Decode.list versionDetailDecoder)
         }
         |> Effect.fromCmd
 
@@ -132,8 +120,7 @@ fetchVersionDetail versionId =
 
 
 type Msg
-    = GotVersions (Result Http.Error (List Version))
-    | GotVersionDetail Int (Result Http.Error VersionDetail)
+    = GotAllVersionDetails (Result Http.Error (List VersionDetail))
     | NavigateToRoute Route.Route
     | LogoutRequested
     | LogoutResponse (Result Http.Error ())
@@ -151,40 +138,13 @@ type Msg
 update : Shared.Model -> Request.With Params -> Msg -> Model -> ( Model, Effect Msg )
 update shared req msg model =
     case msg of
-        GotVersions (Ok versions) ->
-            let
-                versionIdsToFetch =
-                    versions
-                        |> List.map .id
-                        |> List.filter (\id -> not (Dict.member id model.versionDetails))
-            in
-            ( { model | versions = versions, loading = False }
-            , if List.isEmpty versionIdsToFetch then
-                Effect.none
-
-              else
-                versionIdsToFetch
-                    |> List.map fetchVersionDetail
-                    |> Effect.batch
-            )
-
-        GotVersions (Err _) ->
-            ( { model | loading = False, error = Just "Failed to load versions" }, Effect.none )
-
-        GotVersionDetail versionId (Ok detail) ->
-            let
-                updatedDetails =
-                    Dict.insert versionId detail model.versionDetails
-
-                allFetched =
-                    List.length model.versions == Dict.size updatedDetails
-            in
-            ( { model | versionDetails = updatedDetails, loading = not allFetched }
+        GotAllVersionDetails (Ok details) ->
+            ( { model | versionDetails = details, loading = False }
             , Effect.none
             )
 
-        GotVersionDetail _ (Err _) ->
-            ( model, Effect.none )
+        GotAllVersionDetails (Err _) ->
+            ( { model | loading = False, error = Just "Failed to load versions" }, Effect.none )
 
         NavigateToRoute route ->
             ( model, Effect.fromCmd (Request.pushRoute route req) )
@@ -325,7 +285,7 @@ viewContent shared model =
                             model.softwareList
 
                     rows =
-                        buildReleaseInsightRows model.versions model.versionDetails
+                        buildReleaseInsightRows model.versionDetails
                             |> (if model.compactView then
                                     \rs -> rs |> compactRows |> fillMissingVersions softwareList
 
@@ -338,47 +298,42 @@ viewContent shared model =
                 viewReleaseTable model softwareList rows
 
 
-buildReleaseInsightRows : List Version -> Dict Int VersionDetail -> List ReleaseInsightRow
-buildReleaseInsightRows versions versionDetails =
-    versions
-        |> List.filterMap
-            (\version ->
-                Dict.get version.id versionDetails
-                    |> Maybe.map
-                        (\detail ->
-                            let
-                                rows =
-                                    if List.isEmpty detail.customers then
-                                        -- If no customers, create one row with empty customer
-                                        [ { releaseDate = formatDate detail.releaseDate
-                                          , releaseDateRaw = detail.releaseDate
-                                          , releasedBy = detail.releasedByName
-                                          , releasedFor = ""
-                                          , notes = formatNotesWithSoftware detail.softwareName detail.notes
-                                          , releaseStatuses = [ detail.releaseStatus ]
-                                          , softwareVersions = Dict.singleton detail.softwareId { version = detail.version, isFromCurrentDate = True }
-                                          }
-                                        ]
+buildReleaseInsightRows : List VersionDetail -> List ReleaseInsightRow
+buildReleaseInsightRows versionDetails =
+    versionDetails
+        |> List.concatMap
+            (\detail ->
+                let
+                    rows =
+                        if List.isEmpty detail.customers then
+                            -- If no customers, create one row with empty customer
+                            [ { releaseDate = formatDate detail.releaseDate
+                              , releaseDateRaw = detail.releaseDate
+                              , releasedBy = detail.releasedByName
+                              , releasedFor = ""
+                              , notes = formatNotesWithSoftware detail.softwareName detail.notes
+                              , releaseStatuses = [ detail.releaseStatus ]
+                              , softwareVersions = Dict.singleton detail.softwareId { version = detail.version, isFromCurrentDate = True }
+                              }
+                            ]
 
-                                    else
-                                        -- Create one row per customer with per-customer status
-                                        List.map
-                                            (\customer ->
-                                                { releaseDate = formatDate detail.releaseDate
-                                                , releaseDateRaw = detail.releaseDate
-                                                , releasedBy = detail.releasedByName
-                                                , releasedFor = customer.name
-                                                , notes = formatNotesForCustomerWithSoftware detail.softwareName customer.id detail.notes
-                                                , releaseStatuses = [ customerStageToReleaseStatus customer.releaseStage ]
-                                                , softwareVersions = Dict.singleton detail.softwareId { version = detail.version, isFromCurrentDate = True }
-                                                }
-                                            )
-                                            detail.customers
-                            in
-                            rows
-                        )
+                        else
+                            -- Create one row per customer with per-customer status
+                            List.map
+                                (\customer ->
+                                    { releaseDate = formatDate detail.releaseDate
+                                    , releaseDateRaw = detail.releaseDate
+                                    , releasedBy = detail.releasedByName
+                                    , releasedFor = customer.name
+                                    , notes = formatNotesForCustomerWithSoftware detail.softwareName customer.id detail.notes
+                                    , releaseStatuses = [ customerStageToReleaseStatus customer.releaseStage ]
+                                    , softwareVersions = Dict.singleton detail.softwareId { version = detail.version, isFromCurrentDate = True }
+                                    }
+                                )
+                                detail.customers
+                in
+                rows
             )
-        |> List.concat
 
 
 formatNotesWithSoftware : String -> List NoteDetail -> String

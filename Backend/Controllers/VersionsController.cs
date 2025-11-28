@@ -39,6 +39,70 @@ public class VersionsController : BaseController
         return Ok(versions);
     }
 
+    [HttpGet("details")]
+    public async Task<ActionResult<IEnumerable<VersionDetailResponse>>> GetAllDetails()
+    {
+        var versions = await _context.VersionHistories
+            .Include(v => v.Software)
+            .Include(v => v.ReleasedBy)
+            .Include(v => v.VersionHistoryCustomers)
+                .ThenInclude(vhc => vhc.Customer)
+                    .ThenInclude(c => c.Country)
+            .Include(v => v.HistoryNotes)
+                .ThenInclude(n => n.HistoryNoteCustomers)
+                    .ThenInclude(hnc => hnc.Customer)
+                        .ThenInclude(c => c.Country)
+            .OrderByDescending(v => v.ReleaseDate)
+            .ToListAsync();
+
+        var result = versions.Select(version =>
+        {
+            var stageLookup = version.VersionHistoryCustomers.ToDictionary(vhc => vhc.CustomerId, vhc => vhc.ReleaseStage);
+
+            return new VersionDetailResponse
+            {
+                Id = version.Id,
+                Version = version.Version,
+                SoftwareId = version.SoftwareId,
+                SoftwareName = version.Software.Name,
+                ReleaseDate = version.ReleaseDate,
+                ReleaseStatus = version.ReleaseStatus,
+                ReleasedByName = version.ReleasedBy.Name,
+                Customers = version.VersionHistoryCustomers
+                    .Select(vhc => new CustomerDto
+                    {
+                        Id = vhc.Customer.Id,
+                        Name = vhc.Customer.Name,
+                        IsActive = vhc.Customer.IsActive,
+                        CountryName = vhc.Customer.Country.Name,
+                        ReleaseStage = vhc.ReleaseStage
+                    })
+                    .ToList(),
+                Notes = version.HistoryNotes
+                    .Select(n => new NoteDetailDto
+                    {
+                        Id = n.Id,
+                        Note = n.Note,
+                        Customers = n.HistoryNoteCustomers
+                            .Select(hnc => new CustomerDto
+                            {
+                                Id = hnc.Customer.Id,
+                                Name = hnc.Customer.Name,
+                                IsActive = hnc.Customer.IsActive,
+                                CountryName = hnc.Customer.Country.Name,
+                                ReleaseStage = stageLookup.TryGetValue(hnc.CustomerId, out var stage)
+                                    ? stage
+                                    : CustomerReleaseStage.PreRelease
+                            })
+                            .ToList()
+                    })
+                    .ToList()
+            };
+        }).ToList();
+
+        return Ok(result);
+    }
+
     [HttpGet("{id}")]
     public async Task<ActionResult<VersionDetailResponse>> GetById(int id)
     {
